@@ -66,21 +66,21 @@ end)
 -- ── State Variables ──
 local State = {
     -- 1. Mua Trứng Từ Con Sông (River Auto Buy)
-    AutoBuy = true,
+    AutoBuy = false, -- Tắt mặc định để máy siêu mượt
     AutoBuyAll = true,
-    BuyDelayIndex = 2,
-    BuyDelay = 0.15,
-    RiverProximityAssist = true,
+    BuyDelayIndex = 3, -- 0.3s
+    BuyDelay = 0.3,
+    RiverProximityAssist = false,
 
     -- 2. Trồng Trứng & Thu Hoạch Né Sét (Plant & Harvest)
     AutoPlant = false,
-    LightningShield247 = true, -- Khiên bảo vệ độc lập 24/7
+    LightningShield247 = true, -- Khiên bảo vệ độc lập 24/7 (Siêu tối ưu 0ms, Zero Lag)
     AutoDodgeLightning = true,
     DodgeLeadTimeIndex = 6, -- 2.0s
     GrowthWaitIndex = 4, -- 15s
 
     -- 3. Thức Ăn May Mắn (Luck Food)
-    AutoFood = true,
+    AutoFood = false,
     SelectedFoodIndex = 1, -- Basic (+37% Free)
 
     -- 4. Bán Con Vật & Thu Tiền (Economy)
@@ -88,20 +88,30 @@ local State = {
     AutoSell = false,
     AutoTrash = false,
 
-    -- 5. Visuals & ESP
-    EggESP = true,
-    SkyBeacons = true,
-    FPSBoost = false,
+    -- 5. Visuals & ESP (Tắt mặc định để máy siêu mượt 60 FPS)
+    EggESP = false,
+    SkyBeacons = false,
+    FPSBoost = true, -- BẬT MẶC ĐỊNH SIÊU MƯỢT!
 
     -- 6. Utilities
     SpeedEnabled = false,
-    WalkSpeed = 120,
-    CFrameBoost = true,
-    CFrameSpeed = 5,
+    WalkSpeed = 100,
+    CFrameBoost = false,
+    CFrameSpeed = 3,
     InfiniteJump = false,
     Noclip = false,
     AntiAFK = true
 }
+
+local cachedMyPlot = nil
+local cachedPadPart = nil
+local cachedPlantPrompt = nil
+local cachedHarvestPrompt = nil
+local cachedPadPos = nil
+local cachedRiverPrompts = {}
+local lastRiverScanTime = 0
+local lastThreatDetectedTime = 0
+local lastPlotScanTime = 0
 
 local ALL_BUY_DELAYS = {0.05, 0.15, 0.3, 0.5, 1.0}
 local ALL_DODGE_TIMES = {0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0}
@@ -167,13 +177,19 @@ local function getMyPlot()
         return cachedMyPlot
     end
 
+    local now = os.clock()
+    if now - lastPlotScanTime < 1.0 and cachedMyPlot then
+        return cachedMyPlot
+    end
+    lastPlotScanTime = now
+
     local pName = LocalPlayer.Name:lower()
     local pDisp = LocalPlayer.DisplayName:lower()
     local pId = tostring(LocalPlayer.UserId)
     local targetPlotName = "Plot_" .. pId
 
     pcall(function()
-        local plotsFolder = Workspace:FindFirstChild("Plots") or Workspace:FindFirstChild("Bases") or Workspace:FindFirstChild("Islands") or Workspace:FindFirstChild("Farms")
+        local plotsFolder = Workspace:FindFirstChild("Plots") or Workspace:FindFirstChild("Bases") or Workspace:FindFirstChild("Islands") or Workspace:FindFirstChild("Farms") or Workspace:FindFirstChild("Tycoons")
         if plotsFolder then
             local tycoons = plotsFolder:FindFirstChild("Tycoons") or plotsFolder:FindFirstChild("PlotSlots") or plotsFolder:FindFirstChild("Plots")
             if tycoons then
@@ -214,12 +230,6 @@ local function getMyPlot()
             local oName = obj.Name:lower()
             if (oName:find("plot") or oName:find("base") or oName:find("farm")) and (oName:find(pName) or oName:find(pId) or oName:find(pDisp)) then
                 cachedMyPlot = obj return
-            end
-        end
-
-        for _, desc in ipairs(Workspace:GetDescendants()) do
-            if (desc:IsA("Model") or desc:IsA("Folder")) and desc.Name == targetPlotName then
-                cachedMyPlot = desc return
             end
         end
     end)
@@ -325,37 +335,53 @@ end
 
 -- ── 🛒 1. MUA TRỨNG TỪ CON SÔNG (RIVER BUY DETECTOR) ──
 local function getRiverPrompts()
+    local now = os.clock()
+    if (now - lastRiverScanTime) < 0.75 and #cachedRiverPrompts > 0 then
+        local valid = {}
+        for _, p in ipairs(cachedRiverPrompts) do
+            if p and p.Parent then table.insert(valid, p) end
+        end
+        if #valid > 0 then return valid end
+    end
+    lastRiverScanTime = now
+
     local riverPrompts = {}
     local myPlot = getMyPlot()
 
     pcall(function()
-        for _, prompt in ipairs(Workspace:GetDescendants()) do
-            if prompt:IsA("ProximityPrompt") then
-                local parent = prompt.Parent
-                if parent and not isOtherPlayerPlot(parent) then
-                    if not (myPlot and (parent == myPlot or parent:IsDescendantOf(myPlot))) then
-                        local act = (prompt.ActionText or ""):lower()
-                        local obj = (prompt.ObjectText or ""):lower()
-                        local pName = parent.Name:lower()
+        local riverContainer = Workspace:FindFirstChild("River") or Workspace:FindFirstChild("Conveyor") 
+                            or Workspace:FindFirstChild("Eggs") or Workspace:FindFirstChild("EggSpawns") 
+                            or Workspace:FindFirstChild("Stream")
+        
+        local searchTargets = {}
+        if riverContainer then
+            table.insert(searchTargets, riverContainer)
+        else
+            for _, child in ipairs(Workspace:GetChildren()) do
+                local n = child.Name:lower()
+                if (n:find("river") or n:find("conveyor") or n:find("belt") or n:find("stream") or n:find("egg")) 
+                   and (child:IsA("Folder") or child:IsA("Model")) then
+                    if not isOtherPlayerPlot(child) and child ~= myPlot then
+                        table.insert(searchTargets, child)
+                    end
+                end
+            end
+        end
 
-                        local isRiverBuy = act:find("buy") or act:find("purchase") or act:find("mua")
-                                        or act:find("take") or act:find("claim") or act:find("grab") or act:find("pick")
-                                        or obj:find("buy") or obj:find("egg") or obj:find("trứng")
-                                        or pName:find("egg") or pName:find("conveyor") or pName:find("river")
-                                        or pName:find("belt") or pName:find("stream")
-
-                        if not isRiverBuy then
-                            local m = parent
-                            while m and not m:IsA("Model") and m ~= Workspace do
-                                m = m.Parent
-                            end
-                            if m and (m.Name:lower():find("egg") or m.Name:lower():find("conveyor") or m.Name:lower():find("river")) then
-                                isRiverBuy = true
-                            end
-                        end
-
-                        if isRiverBuy then
-                            table.insert(riverPrompts, prompt)
+        if #searchTargets > 0 then
+            for _, target in ipairs(searchTargets) do
+                for _, prompt in ipairs(target:GetDescendants()) do
+                    if prompt:IsA("ProximityPrompt") then
+                        table.insert(riverPrompts, prompt)
+                    end
+                end
+            end
+        else
+            for _, child in ipairs(Workspace:GetChildren()) do
+                if child:IsA("Model") and not isOtherPlayerPlot(child) and child ~= myPlot then
+                    for _, d in ipairs(child:GetChildren()) do
+                        if d:IsA("ProximityPrompt") then
+                            table.insert(riverPrompts, d)
                         end
                     end
                 end
@@ -363,137 +389,103 @@ local function getRiverPrompts()
         end
     end)
 
+    cachedRiverPrompts = riverPrompts
     return riverPrompts
 end
 
 -- ── 🌱 2. TRỒNG TRỨNG VÀO KHU ĐẤT (EGG PAD DETECTOR) ──
 local function getEggPadPrompts(plot)
+    if cachedPadPart and cachedPadPart.Parent and ((cachedPlantPrompt and cachedPlantPrompt.Parent) or (cachedHarvestPrompt and cachedHarvestPrompt.Parent)) then
+        return cachedPlantPrompt, cachedHarvestPrompt, cachedPadPart
+    end
+
     if not plot then
         plot = getMyPlot()
     end
+    if not plot then return nil, nil, nil end
+
     local plantPrompt, harvestPrompt, padPart = nil, nil, nil
 
     local excludeKeywords = {
         "trash", "bin", "dump", "sell", "buy", "purchase", "mua", 
-        "money", "cash", "coin", "collect money", "collect cash", "gom",
-        "store", "shop", "vendor", "like", "reward", "group", "gift", "daily", "spin", "chest"
+        "money", "cash", "coin", "collect", "gom", "store", "shop"
     }
 
-    local candidatePrompts = {}
-
-    if plot then
-        pcall(function()
-            for _, desc in ipairs(plot:GetDescendants()) do
-                if desc:IsA("ProximityPrompt") then
-                    table.insert(candidatePrompts, desc)
-                end
-            end
-        end)
-    end
-
     pcall(function()
-        local hrp = getRootPart()
-        if hrp then
-            for _, prompt in ipairs(Workspace:GetDescendants()) do
-                if prompt:IsA("ProximityPrompt") and not isOtherPlayerPlot(prompt.Parent) then
-                    local pPart = prompt.Parent
-                    local pos = pPart and (pPart:IsA("BasePart") and pPart.Position or (pPart:IsA("Model") and pPart.PrimaryPart and pPart.PrimaryPart.Position))
-                    if pos and (pos - hrp.Position).Magnitude <= 25 then
-                        local already = false
-                        for _, cp in ipairs(candidatePrompts) do
-                            if cp == prompt then already = true break end
-                        end
-                        if not already then
-                            table.insert(candidatePrompts, prompt)
-                        end
+        for _, desc in ipairs(plot:GetDescendants()) do
+            if desc:IsA("ProximityPrompt") then
+                local act = (desc.ActionText or ""):lower()
+                local obj = (desc.ObjectText or ""):lower()
+                local isExcluded = false
+                for _, kw in ipairs(excludeKeywords) do
+                    if act:find(kw) or obj:find(kw) then isExcluded = true break end
+                end
+
+                if not isExcluded then
+                    local isHarvest = act:find("harvest") or act:find("take") or act:find("pick") 
+                                   or act:find("claim") or act:find("hatch") or act:find("thu") 
+                                   or act:find("ấp") or act:find("lấy") or act:find("gặt")
+                    local isPlant = not isHarvest and (act:find("plant") or act:find("place") or act:find("deposit") 
+                                                    or act:find("put") or act:find("gieo") or act:find("đặt") or act:find("trồng")
+                                                    or obj:find("pad") or obj:find("plot"))
+
+                    if isHarvest and not harvestPrompt then
+                        harvestPrompt = desc
+                        padPart = desc.Parent
+                    elseif isPlant and not plantPrompt then
+                        plantPrompt = desc
+                        padPart = desc.Parent
                     end
                 end
             end
         end
+
+        if not padPart then
+            padPart = plot:FindFirstChild("EggPad") or plot:FindFirstChild("Pad") or plot:FindFirstChild("Soil") or plot:FindFirstChild("GrowPad")
+        end
     end)
 
-    for _, desc in ipairs(candidatePrompts) do
-        local act = (desc.ActionText or ""):lower()
-        local obj = (desc.ObjectText or ""):lower()
-        local pName = desc.Parent and desc.Parent.Name:lower() or ""
-
-        local isExcluded = false
-        for _, kw in ipairs(excludeKeywords) do
-            if act:find(kw) or obj:find(kw) or pName:find(kw) then
-                isExcluded = true break
-            end
-        end
-
-        if not isExcluded then
-            -- Nút Thu Hoạch (Harvest/Ấp con vật):
-            local isHarvest = act:find("harvest") or act:find("take") or act:find("pick") 
-                           or act:find("claim") or act:find("hatch") or act:find("collect") 
-                           or act:find("grab") or act:find("thu") or act:find("ấp") 
-                           or act:find("lấy") or act:find("gặt") or act:find("nhặt")
-
-            -- Nút Gieo Trứng (Plant):
-            local isPlant = not isHarvest and (act:find("plant") or act:find("place") or act:find("deposit") 
-                                            or act:find("put") or act:find("sow") or act:find("gieo") 
-                                            or act:find("đặt") or act:find("trồng") 
-                                            or (obj:find("pad") and act == "") or (obj:find("plot") and act == ""))
-
-            if isHarvest then
-                if not harvestPrompt then
-                    harvestPrompt = desc
-                    padPart = desc.Parent
-                end
-            elseif isPlant then
-                if not plantPrompt then
-                    plantPrompt = desc
-                    padPart = desc.Parent
-                end
-            end
-        end
+    if padPart then
+        cachedPadPart = padPart
+        cachedPadPos = padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position)
     end
-
-    if not padPart and plot then
-        padPart = plot:FindFirstChild("EggPad") or plot:FindFirstChild("Pad") or plot:FindFirstChild("Soil") or plot:FindFirstChild("GrowPad") or plot:FindFirstChild("Plot")
-    end
+    if plantPrompt then cachedPlantPrompt = plantPrompt end
+    if harvestPrompt then cachedHarvestPrompt = harvestPrompt end
 
     return plantPrompt, harvestPrompt, padPart
 end
 
 -- ── ⚡ 3. PHÁT HIỆN SÉT ĐÁNH VÀO KHU ĐẤT ──
-local lastThreatDetectedTime = 0
-
 local function checkLightningThreat(padPart, plot, plantStartTime)
     if not padPart then return false, nil end
+    local padPos = cachedPadPos or (padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position))
+    if not padPos then return false, nil end
+
     local hasThreat = false
     local strikeTime = nil
 
     pcall(function()
-        local padPos = padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position)
-        if not padPos then return end
-
         for _, obj in ipairs(Workspace:GetChildren()) do
             local oName = obj.Name:lower()
             if oName:find("lightning") or oName:find("thunder") or oName:find("strike") or oName:find("storm") or oName:find("cloud") then
                 local oPos = obj:IsA("BasePart") and obj.Position or (obj:IsA("Model") and obj.PrimaryPart and obj.PrimaryPart.Position)
                 if oPos then
-                    local horizontalDist = math.sqrt((oPos.X - padPos.X)^2 + (oPos.Z - padPos.Z)^2)
-                    if horizontalDist <= 30 then
+                    local dx = oPos.X - padPos.X
+                    local dz = oPos.Z - padPos.Z
+                    if (dx*dx + dz*dz) <= 1024 then -- within 32 studs
                         hasThreat = true
-                        for _, desc in ipairs(obj:GetDescendants()) do
-                            if desc:IsA("TextLabel") then
-                                local num = desc.Text:match("([%d%.]+)s?")
-                                if num then strikeTime = tonumber(num) end
+                        for _, desc in ipairs(obj:GetChildren()) do
+                            if desc:IsA("BillboardGui") or desc:IsA("SurfaceGui") then
+                                for _, txt in ipairs(desc:GetChildren()) do
+                                    if txt:IsA("TextLabel") then
+                                        local num = txt.Text:match("([%d%.]+)s?")
+                                        if num then strikeTime = tonumber(num) end
+                                    end
+                                end
                             end
                         end
+                        if hasThreat then break end
                     end
-                end
-            end
-        end
-
-        if plot then
-            for _, desc in ipairs(plot:GetDescendants()) do
-                local dName = desc.Name:lower()
-                if dName:find("lightning") or dName:find("cloud") or dName:find("target") then
-                    hasThreat = true
                 end
             end
         end
@@ -514,12 +506,11 @@ pcall(function()
 end)
 
 RunService.Stepped:Connect(function()
-    if State.Noclip then
-        local char = getCharacter()
-        if char then
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then part.CanCollide = false end
-            end
+    if not State.Noclip then return end
+    local char = getCharacter()
+    if char then
+        for _, part in ipairs(char:GetChildren()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
         end
     end
 end)
@@ -978,93 +969,72 @@ local function updateESP(enable)
     clearESP()
     if not enable then return end
 
-    local hrp = getRootPart()
+    local count = 0
+    pcall(function()
+        local riverPrompts = getRiverPrompts()
+        for _, prompt in ipairs(riverPrompts) do
+            if count >= 12 then break end
+            local part = prompt.Parent
+            if part and part:IsA("BasePart") then
+                count = count + 1
+                local model = part
+                while model and not model:IsA("Model") and model ~= Workspace do
+                    model = model.Parent
+                end
+                local targetItem = (model and model:IsA("Model")) and model or part
+                local rarity = detectEggRarity(targetItem)
+                
+                local color = Color3.fromRGB(0, 255, 170)
+                if rarity == "Supreme" then color = Color3.fromRGB(255, 0, 128)
+                elseif rarity == "Secret" or rarity == "Divine" or rarity == "Godly" then color = Color3.fromRGB(255, 215, 0)
+                elseif rarity == "Mythical" then color = Color3.fromRGB(180, 50, 255)
+                elseif rarity == "Legendary" then color = Color3.fromRGB(255, 140, 0)
+                end
 
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("Model") or obj:IsA("BasePart") then
-            local nameLower = obj.Name:lower()
-            if nameLower:find("egg") and not obj:IsDescendantOf(LocalPlayer) then
-                pcall(function()
-                    local part = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
-                    if part then
-                        local rarity = detectEggRarity(obj)
-                        local color = Color3.fromRGB(0, 255, 170)
-                        if rarity == "Supreme" then color = Color3.fromRGB(255, 0, 128)
-                        elseif rarity == "Secret" or rarity == "Divine" or rarity == "Godly" then color = Color3.fromRGB(255, 215, 0)
-                        elseif rarity == "Mythical" then color = Color3.fromRGB(180, 50, 255)
-                        elseif rarity == "Legendary" then color = Color3.fromRGB(255, 140, 0)
-                        end
+                local bb = Instance.new("BillboardGui")
+                bb.Adornee = part
+                bb.AlwaysOnTop = true
+                bb.Size = UDim2.new(0, 140, 0, 32)
+                bb.StudsOffset = Vector3.new(0, 3, 0)
+                bb.MaxDistance = 500
+                bb.Parent = part
 
-                        local hl = Instance.new("Highlight")
-                        hl.Adornee = obj
-                        hl.FillColor = color
-                        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                        hl.FillTransparency = 0.4
-                        hl.Parent = obj
-                        table.insert(ESPHighlights, hl)
+                local frame = Instance.new("Frame")
+                frame.Size = UDim2.new(1, 0, 1, 0)
+                frame.BackgroundColor3 = Color3.fromRGB(14, 18, 26)
+                frame.BackgroundTransparency = 0.25
+                frame.Parent = bb
 
-                        local bb = Instance.new("BillboardGui")
-                        bb.Adornee = part
-                        bb.AlwaysOnTop = true
-                        bb.Size = UDim2.new(0, 170, 0, 42)
-                        bb.StudsOffset = Vector3.new(0, 3.5, 0)
-                        bb.MaxDistance = 8000
-                        bb.Parent = part
+                local fCorner = Instance.new("UICorner")
+                fCorner.CornerRadius = UDim.new(0, 6)
+                fCorner.Parent = frame
 
-                        local frame = Instance.new("Frame")
-                        frame.Size = UDim2.new(1, 0, 1, 0)
-                        frame.BackgroundColor3 = Color3.fromRGB(14, 18, 26)
-                        frame.BackgroundTransparency = 0.25
-                        frame.Parent = bb
+                local lbl = Instance.new("TextLabel")
+                lbl.Size = UDim2.new(1, 0, 1, 0)
+                lbl.BackgroundTransparency = 1
+                lbl.Text = "🥚 [" .. rarity .. "] " .. targetItem.Name
+                lbl.TextColor3 = color
+                lbl.Font = Enum.Font.GothamBold
+                lbl.TextSize = 10
+                lbl.Parent = frame
 
-                        local fCorner = Instance.new("UICorner")
-                        fCorner.CornerRadius = UDim.new(0, 6)
-                        fCorner.Parent = frame
+                table.insert(ESPBillboards, bb)
 
-                        local fStroke = Instance.new("UIStroke")
-                        fStroke.Color = color
-                        fStroke.Thickness = 1.2
-                        fStroke.Parent = frame
-
-                        local lbl = Instance.new("TextLabel")
-                        lbl.Size = UDim2.new(1, 0, 0.55, 0)
-                        lbl.BackgroundTransparency = 1
-                        lbl.Text = "🥚 " .. obj.Name
-                        lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-                        lbl.Font = Enum.Font.GothamBold
-                        lbl.TextSize = 10
-                        lbl.Parent = frame
-
-                        local sub = Instance.new("TextLabel")
-                        sub.Size = UDim2.new(1, 0, 0.45, 0)
-                        sub.Position = UDim2.new(0, 0, 0.55, 0)
-                        sub.BackgroundTransparency = 1
-                        local dist = hrp and math.floor((hrp.Position - part.Position).Magnitude) or 0
-                        sub.Text = "[" .. rarity:upper() .. "] 📍 " .. dist .. "m"
-                        sub.TextColor3 = color
-                        sub.Font = Enum.Font.Gotham
-                        sub.TextSize = 9
-                        sub.Parent = frame
-
-                        table.insert(ESPBillboards, bb)
-
-                        if State.SkyBeacons and (rarity == "Supreme" or rarity == "Secret" or rarity == "Divine" or rarity == "Mythical" or rarity == "Legendary") then
-                            local beacon = Instance.new("Part")
-                            beacon.Size = Vector3.new(1.2, 400, 1.2)
-                            beacon.CFrame = part.CFrame * CFrame.new(0, 200, 0)
-                            beacon.Material = Enum.Material.Neon
-                            beacon.Color = color
-                            beacon.Transparency = 0.45
-                            beacon.CanCollide = false
-                            beacon.Anchored = true
-                            beacon.Parent = Workspace
-                            table.insert(ESPBeacons, beacon)
-                        end
-                    end
-                end)
+                if State.SkyBeacons and (rarity == "Supreme" or rarity == "Secret" or rarity == "Divine") then
+                    local beacon = Instance.new("Part")
+                    beacon.Size = Vector3.new(1, 200, 1)
+                    beacon.CFrame = part.CFrame * CFrame.new(0, 100, 0)
+                    beacon.Material = Enum.Material.Neon
+                    beacon.Color = color
+                    beacon.Transparency = 0.5
+                    beacon.CanCollide = false
+                    beacon.Anchored = true
+                    beacon.Parent = Workspace
+                    table.insert(ESPBeacons, beacon)
+                end
             end
         end
-    end
+    end)
 end
 
 createToggleButton("🔍 Bật 3D Egg ESP Xuyên Tường", State.EggESP, function(v)
@@ -1135,20 +1105,21 @@ end)
 
 -- 1. KHIÊN BẮT SÉT TỨC THÌ (0ms)
 Workspace.DescendantAdded:Connect(function(desc)
+    if not (State.LightningShield247 or State.AutoDodgeLightning) then return end
     pcall(function()
         local dName = desc.Name:lower()
-        if dName:find("lightning") or dName:find("thunder") or dName:find("strike") or dName:find("storm") then
-            local myPlot = getMyPlot()
-            local _, harvestPrompt, padPart = getEggPadPrompts(myPlot)
-            if harvestPrompt and padPart then
-                local padPos = padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position)
-                if padPos and (desc:IsA("BasePart") or (desc:IsA("Model") and desc.PrimaryPart)) then
-                    local dPos = desc:IsA("BasePart") and desc.Position or desc.PrimaryPart.Position
-                    local dist = math.sqrt((dPos.X - padPos.X)^2 + (dPos.Z - padPos.Z)^2)
-                    if dist <= 28 then
+        if dName:find("lightning") or dName:find("thunder") or dName:find("strike") or dName:find("bolt") then
+            if cachedPadPos then
+                local dPos = desc:IsA("BasePart") and desc.Position or (desc:IsA("Model") and desc.PrimaryPart and desc.PrimaryPart.Position)
+                if dPos then
+                    local dx = dPos.X - cachedPadPos.X
+                    local dz = dPos.Z - cachedPadPos.Z
+                    if (dx*dx + dz*dz) <= 1024 then -- within 32 studs
                         lastThreatDetectedTime = os.clock()
-                        setStatus("🛡️ [KHIÊN 24/7] BẮT SÉT TỨC THÌ (0ms)! Thu hoạch trứng vào túi đồ an toàn!")
-                        triggerPrompt(harvestPrompt)
+                        if cachedHarvestPrompt and cachedHarvestPrompt.Parent then
+                            setStatus("🛡️ [KHIÊN 24/7] BẮT SÉT TỨC THÌ (0ms)! Thu hoạch an toàn!")
+                            triggerPrompt(cachedHarvestPrompt)
+                        end
                     end
                 end
             end
@@ -1159,19 +1130,19 @@ end)
 -- 2. KHIÊN BẢO VỆ ĐỘC LẬP 24/7
 task.spawn(function()
     while true do
-        task.wait(0.02)
+        task.wait(0.3)
         if State.LightningShield247 and not State.AutoPlant then
             pcall(function()
                 local myPlot = getMyPlot()
                 local _, harvestPrompt, padPart = getEggPadPrompts(myPlot)
                 if harvestPrompt then
                     local hasThreat, strikeTime = checkLightningThreat(padPart, myPlot, 0)
-                    local recentThreat = (os.clock() - lastThreatDetectedTime) < 1.5
+                    local recentThreat = (os.clock() - lastThreatDetectedTime) < 2.0
                     if hasThreat or recentThreat then
                         local info = strikeTime and (" (còn " .. string.format("%.1f", strikeTime) .. "s)") or ""
-                        setStatus("🛡️ [KHIÊN 24/7] PHÁT HIỆN SÉT" .. info .. "! Đã thu hoạch trứng an toàn 100%!")
+                        setStatus("🛡️ [KHIÊN 24/7] PHÁT HIỆN SÉT" .. info .. "! Đã thu hoạch an toàn!")
                         triggerPrompt(harvestPrompt)
-                        task.wait(0.4)
+                        task.wait(1.0)
                     end
                 end
             end)
@@ -1182,7 +1153,7 @@ end)
 -- 3. 🛒 MUA MỘT QUẢ TRỨNG TỪ CON SÔNG (RIVER AUTO BUY)
 task.spawn(function()
     while true do
-        local delayTime = State.BuyDelay or 0.15
+        local delayTime = math.max(State.BuyDelay or 0.3, 0.25)
         task.wait(delayTime)
 
         if State.AutoBuy or State.AutoBuyAll then
@@ -1217,17 +1188,16 @@ task.spawn(function()
                         if State.RiverProximityAssist and hrp and promptPos then
                             local dist = (hrp.Position - promptPos).Magnitude
                             if dist > 10 and dist < 120 then
-                                local origCFrame = hrp.CFrame
                                 hrp.CFrame = CFrame.new(promptPos + Vector3.new(0, 3, 0))
-                                task.wait(0.04)
+                                task.wait(0.05)
                                 triggerPrompt(prompt)
-                                task.wait(0.04)
+                                task.wait(0.05)
 
                                 if State.AutoPlant then
                                     local myPlot = getMyPlot()
                                     local _, _, padPart = getEggPadPrompts(myPlot)
                                     if padPart then
-                                        local padPos = padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position)
+                                        local padPos = cachedPadPos or (padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position))
                                         if padPos then
                                             hrp.CFrame = CFrame.new(padPos + Vector3.new(0, 3, 0))
                                         end
@@ -1241,7 +1211,7 @@ task.spawn(function()
                         end
 
                         setStatus("🛒 Mua trứng trên sông: [" .. rarity .. "] " .. (targetItem and targetItem.Name or "Egg"))
-                        task.wait(0.05)
+                        task.wait(0.1)
                     end
                 end
             end)
@@ -1254,7 +1224,7 @@ local plantStartTime = 0
 
 task.spawn(function()
     while true do
-        task.wait(0.02)
+        task.wait(0.35)
         if State.AutoPlant then
             pcall(function()
                 local myPlot = getMyPlot()
@@ -1268,82 +1238,89 @@ task.spawn(function()
                     if plantStartTime == 0 then plantStartTime = os.clock() end
                     local elapsedTime = os.clock() - plantStartTime
                     local hasThreat, strikeTime = checkLightningThreat(padPart, myPlot, plantStartTime)
+                    local recentThreat = (os.clock() - lastThreatDetectedTime) < 2.0
 
-                    if hasThreat and State.AutoDodgeLightning then
-                        if strikeTime and strikeTime > targetDodgeLead then
-                            setStatus("⚡ SÉT ĐANG ĐẾM NGƯỢC (còn " .. string.format("%.1f", strikeTime) .. "s)... Căn né trước " .. targetDodgeLead .. "s")
-                        else
-                            local info = strikeTime and (" (còn " .. string.format("%.1f", strikeTime) .. "s)") or ""
-                            setStatus("⚡ SÉT SẮP ĐÁNH" .. info .. "! Thu hoạch NÉ SÉT vào túi đồ ngay!")
-
-                            if hrp and padPart then
-                                local padPos = padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position)
-                                if padPos and (hrp.Position - padPos).Magnitude > 15 then
-                                    hrp.CFrame = CFrame.new(padPos + Vector3.new(0, 3, 0))
+                    -- KIỂM TRA SÉT:
+                    local shouldDodge = false
+                    if State.AutoDodgeLightning then
+                        if hasThreat then
+                            if strikeTime then
+                                if strikeTime <= targetDodgeLead then
+                                    shouldDodge = true
                                 end
+                            else
+                                shouldDodge = true
                             end
-
-                            triggerPrompt(harvestPrompt)
-                            plantStartTime = 0
-                            task.wait(0.4)
-                        end
-                    else
-                        -- Không có sét -> Nuôi trứng phát triển để ấp những con vật điên rồ!
-                        if elapsedTime >= targetGrowthTime then
-                            setStatus("🦖 Đã ấp thành con vật hoàn chỉnh (" .. math.floor(elapsedTime) .. "s) -> Thu hoạch!")
-
-                            if hrp and padPart then
-                                local padPos = padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position)
-                                if padPos and (hrp.Position - padPos).Magnitude > 15 then
-                                    hrp.CFrame = CFrame.new(padPos + Vector3.new(0, 3, 0))
-                                end
-                            end
-
-                            triggerPrompt(harvestPrompt)
-                            plantStartTime = 0
-                            task.wait(0.4)
-                        else
-                            setStatus("🥚 Đang xem trứng phát triển (" .. math.floor(elapsedTime) .. "s/" .. targetGrowthTime .. "s)... Canh chừng sét ⚡")
-                            task.wait(0.1)
+                        elseif recentThreat then
+                            shouldDodge = true
                         end
                     end
+
+                    if shouldDodge then
+                        local info = strikeTime and (" (còn " .. string.format("%.1f", strikeTime) .. "s)") or ""
+                        setStatus("⚡ PHÁT HIỆN SÉT ĐÁNH" .. info .. "! Tự động thu hoạch trứng né sét thành công!")
+                        triggerPrompt(harvestPrompt)
+                        plantStartTime = 0
+                        task.wait(0.8)
+                        return
+                    end
+
+                    -- BÓN THỨC ĂN:
+                    if State.AutoFood then
+                        local foodType = ALL_FOOD_TYPES[State.SelectedFoodIndex] or "Basic"
+                        if foodType ~= "None" then
+                            pcall(function()
+                                for _, d in ipairs(padPart:GetDescendants()) do
+                                    if d:IsA("ProximityPrompt") then
+                                        local act = (d.ActionText or ""):lower()
+                                        local obj = (d.ObjectText or ""):lower()
+                                        if act:find("feed") or act:find("ăn") or obj:find("feed") or obj:find("luck") then
+                                            triggerPrompt(d)
+                                            break
+                                        end
+                                    end
+                                end
+                            end)
+                        end
+                    end
+
+                    -- ĐỦ THỜI GIAN NUÔI TRƯỞNG THÀNH:
+                    if elapsedTime >= targetGrowthTime then
+                        setStatus("🦖 Trứng đã lớn & ấp nở thành thú (" .. math.floor(elapsedTime) .. "s)! Đang thu hoạch...")
+                        triggerPrompt(harvestPrompt)
+                        plantStartTime = 0
+                        task.wait(0.8)
+                        return
+                    else
+                        local left = math.ceil(targetGrowthTime - elapsedTime)
+                        setStatus("🥚 Đang phát triển trên bệ... (Còn " .. left .. "s để ấp nở thú)")
+                    end
+
+                -- 4.2 BỆ ĐẤT ĐANG TRỐNG: GIEO TRỒNG TRỨNG TỪ TÚI ĐỒ VÀO KHU ĐẤT
                 elseif plantPrompt then
-                    -- 4.2 BỆ TRỐNG -> LẤY TRỨNG VỪA MUA TỪ CON SÔNG RA TRỒNG VÀO KHU ĐẤT
                     plantStartTime = 0
-                    local bp = LocalPlayer:FindFirstChild("Backpack")
                     local char = getCharacter()
+                    local bp = getBackpack()
                     local eggTool = nil
 
-                    -- Kiểm tra tool trên tay
                     if char then
                         for _, t in ipairs(char:GetChildren()) do
-                            if t:IsA("Tool") then
-                                local tName = t.Name:lower()
-                                if tName:find("egg") or t:GetAttribute("Rarity") or t:FindFirstChild("Rarity") then
-                                    eggTool = t
-                                    break
-                                end
+                            if t:IsA("Tool") and t.Name:lower():find("egg") then
+                                eggTool = t break
                             end
                         end
                     end
-
-                    -- Kiểm tra tool trong Backpack
+                    if not eggTool and bp then
+                        for _, t in ipairs(bp:GetChildren()) do
+                            if t:IsA("Tool") and t.Name:lower():find("egg") then
+                                eggTool = t break
+                            end
+                        end
+                    end
                     if not eggTool and bp then
                         for _, t in ipairs(bp:GetChildren()) do
                             if t:IsA("Tool") then
-                                local tName = t.Name:lower()
-                                if tName:find("egg") or t:GetAttribute("Rarity") or t:FindFirstChild("Rarity") then
-                                    eggTool = t
-                                    break
-                                end
-                            end
-                        end
-                        if not eggTool and bp then
-                            for _, t in ipairs(bp:GetChildren()) do
-                                if t:IsA("Tool") then
-                                    eggTool = t
-                                    break
-                                end
+                                eggTool = t break
                             end
                         end
                     end
@@ -1355,7 +1332,7 @@ task.spawn(function()
                         end
 
                         if hrp and padPart then
-                            local padPos = padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position)
+                            local padPos = cachedPadPos or (padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position))
                             if padPos and (hrp.Position - padPos).Magnitude > 12 then
                                 hrp.CFrame = CFrame.new(padPos + Vector3.new(0, 3, 0))
                                 task.wait(0.08)
@@ -1364,15 +1341,15 @@ task.spawn(function()
 
                         setStatus("🌱 Trồng trứng vào khu đất: " .. eggTool.Name .. "...")
                         triggerPrompt(plantPrompt)
-                        task.wait(0.35)
+                        task.wait(0.5)
                     else
-                        setStatus("⏳ Túi đồ hết trứng! Đang tự động mua thêm từ con sông...")
-                        task.wait(0.4)
+                        setStatus("⏳ Túi đồ hết trứng! Hãy bật Auto Mua trên sông để tự mua thêm.")
+                        task.wait(1.0)
                     end
                 else
                     plantStartTime = 0
                     setStatus("🔍 Đang tìm khu đất của bạn...")
-                    task.wait(0.5)
+                    task.wait(1.0)
                 end
             end)
         end
@@ -1382,15 +1359,17 @@ end)
 -- 5. 💰 AUTO HÚT TIỀN CASH/S TRÊN KHU ĐẤT
 task.spawn(function()
     while true do
-        task.wait(0.5)
+        task.wait(1.5)
         if State.AutoCollectCash then
             pcall(function()
                 local hrp = getRootPart()
                 if not hrp then return end
                 for _, obj in ipairs(Workspace:GetChildren()) do
-                    local name = obj.Name:lower()
-                    if obj:IsA("BasePart") and (name:find("coin") or name:find("cash") or name:find("gem") or name:find("orb") or name:find("drop")) then
-                        obj.CFrame = hrp.CFrame
+                    if obj:IsA("BasePart") then
+                        local name = obj.Name:lower()
+                        if name:find("coin") or name:find("cash") or name:find("gem") or name:find("orb") or name:find("drop") then
+                            obj.CFrame = hrp.CFrame
+                        end
                     end
                 end
             end)
@@ -1401,16 +1380,23 @@ end)
 -- 6. ESP REFRESH LOOP
 task.spawn(function()
     while true do
-        task.wait(4)
+        task.wait(5.0)
         if State.EggESP then
             updateESP(true)
         end
     end
 end)
 
-task.defer(function()
-    task.wait(1.5)
-    if State.EggESP then updateESP(true) end
+-- Tự động kích hoạt FPS Boost siêu mượt ngay khi chạy
+pcall(function()
+    Lighting.GlobalShadows = false
+    Lighting.FogEnd = 9e9
+    for _, fx in ipairs(Lighting:GetChildren()) do
+        if fx:IsA("PostEffect") then fx.Enabled = false end
+    end
+    if settings and settings().Rendering then
+        settings().Rendering.QualityLevel = 1
+    end
 end)
 
-setStatus("✅ Đã khởi chạy Trứng Tham Lam V2.2 thành công!")
+setStatus("✅ Đã khởi chạy Trứng Tham Lam V2.2 (Siêu Mượt 60 FPS) thành công!")
