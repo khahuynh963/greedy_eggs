@@ -1,6 +1,6 @@
-# 🥚 GREEDY EGGS - ULTIMATE AUTO HUB V1.0 (PRO EDITION)
+# 🥚 GREEDY EGGS - ULTIMATE AUTO FARM HUB V2.2
 
-Script tự động chơi toàn diện cho tựa game **Greedy Eggs 🥚** trên Roblox, tối ưu mượt mà cho **Delta Executor (Android & PC)** và các Executor phổ biến khác (Wave, Codex, Hydrogen, Fluxus).
+Script tự động chơi toàn diện cho tựa game **Trứng tham lam 🥚 (Greedy Eggs)** trên Roblox, bám sát 100% mô tả và lối chơi chính thức của game. Tối ưu siêu mượt cho **Delta Executor (Android & PC)**, Codex, Wave, Fluxus.
 
 ---
 
@@ -14,36 +14,50 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/khahuynh963/greedy_eg
 
 ---
 
-## 🌟 Tính Năng Nổi Bật
+## 🎮 Lối Chơi Cốt Lõi (Theo Mô Tả Game)
 
-### ⚡ **Khiên Chống Sét 24/7 & Auto Gieo Trồng Né Sét (Độc Quyền)**
-* **🛡️ Khiên Chống Sét Độc Lập 24/7:** Quét và bắt tia sét tức thời (0ms), tự động thu hoạch trứng an toàn vào túi đồ trước khi sét giáng xuống. Bảo vệ 100% không bao giờ bị vỡ trứng quý.
-* **🌱 Auto Gieo Trồng Trứng (AutoPlant):** Tự động đặt trứng lên tổ (Plot Pad) để nuôi lớn.
-* **⏱️ Căn Giờ Thu Hoạch Né Sét Thông Minh:** Tự động né sét trước khi sét đánh (tùy chọn 0.5s - 2.5s).
-* **⏳ Canh Thời Gian Nuôi Tối Đa:** Tự động thu hoạch sau khi trứng lớn đủ thời gian chỉ định (5s, 10s, 15s, 20s, 30s...).
-* **🍖 Tự Cho Trứng Ăn (Tăng Luck):** Tự động bón thức ăn tăng độ may mắn (từ Basic +37% Luck miễn phí đến Magic +250% Luck).
+> 🥚 **Mua một quả trứng từ con sông**  
+> 🌱 **Trồng nó trong khu đất của bạn**  
+> 🥚 **Xem trứng của bạn phát triển**  
+> 🦖 **Ấp những con vật điên rồ**  
+> ⚡ **Thu hoạch trước khi sét đánh!**  
 
-### 🛒 **Auto Mua Trứng Trôi Sông & Market**
-* **🎯 Lọc Trứng Theo Độ Hiếm:** Tự động mua trứng theo bộ lọc tùy chỉnh từ Common đến Supreme (*Mythical, Godly, Secret, Divine, OG, Celestial, Eternal, Supreme...*).
-* **⚡ Auto Buy ALL:** Chế độ mua sạch toàn bộ trứng trôi trên sông không bỏ sót.
+---
 
-### 🏃 **Trộm Trứng Cuối Map & Tối Ưu Kinh Tế**
-* **🦅 Auto Trộm Trứng Cuối Map:** Tự động bay/chạy tới bãi trộm cuối map, quét và trộm quả trứng có giá trị $/s cao nhất mang về căn cứ.
-* **💰 Auto Hút Tiền & Kim Cương (Auto Collect Cash):** Hút toàn bộ tiền xu và gem rơi trên Plot.
-* **🏷️ Auto Bán Thú/Trứng (Auto Sell):** Tự động bán để tích lũy tiền tệ nâng cấp.
-* **🗑️ Auto Vứt Trứng Rác (Auto Trash):** Tự lọc và vứt các loại trứng phẩm cấp thấp (Common, Rare) để trống chỗ chứa túi đồ.
+## 🌟 Tính Năng Tự Động Toàn Diện V2.2
 
-### 👁️ **Visuals & 3D Egg ESP**
-* **📦 3D Egg ESP Xuyên Tường:** Hiển thị khung viền Highlight, tên trứng, phẩm cấp và khoảng cách (mét) theo thời gian thực.
-* **🌌 Sky Beacon (Cột Sáng Lên Trời):** Tạo cột sáng Neon cao vút chiếu thẳng lên trời cho các trứng xịn (Supreme, Secret, Divine, Mythical, Legendary).
-* **⚡ Chế Độ Siêu Mượt 60 FPS:** Tắt bóng đổ, khử hiệu ứng đồ họa nặng để treo máy nhiều acc mượt mà không nóng máy.
+### 🛒 **1. Auto Mua Trứng Từ Con Sông (River Buying)**
+* **🌊 Quét Trứng Trôi Sông:** Tự động phát hiện các quả trứng đang trôi trên sông gần khu đất.
+* **🎯 Lọc Phẩm Cấp Thông Minh:** Tùy chọn mua theo phẩm cấp từ Common, Rare, Epic, Legendary, Mythical, Godly, Secret, Divine, OG, Celestial, Eternal đến **Supreme**.
+* **⚡ Auto Buy ALL:** Chế độ hốt trọn mọi quả trứng trôi trên sông với tốc độ tức thời.
+* **🚶 Hỗ Trợ Tiếp Cận Sông:** Tự động áp sát vị trí trứng trôi nếu khoảng cách hơi xa để kích hoạt Prompt mua 100% thành công.
 
-### 🏃💨 **Tốc Độ & Tiện Ích**
-* **⚡ Speed Slider:** Điều chỉnh tốc độ di chuyển cực nhanh (60, 100, 150, 200, 250).
+### 🌱 **2. Auto Trồng & Chăm Sóc Trứng (Auto Plant & Nurture)**
+* **🌱 Auto Gieo Trồng Trứng:** Tự động trang bị trứng từ túi đồ (Backpack) và đặt lên bệ đất (Plot Pad) của bạn.
+* **🍖 Tự Cho Trứng Ăn (Tăng Luck):** Tự động bón thức ăn tăng độ may mắn để nở ra thú siêu hiếm (từ Basic +37% Luck miễn phí đến Magic +250% Luck).
+* **⏳ Canh Giờ Trưởng Thành:** Tùy chỉnh thời gian nuôi trứng tối ưu trước khi thu hoạch (5s, 10s, 15s, 20s, 30s...).
+
+### ⚡ **3. Khiên Chống Sét 24/7 & Thu Hoạch Né Sét (Độc Quyền)**
+* **🛡️ Khiên Chống Sét 24/7 (Lightning Shield):** Bắt sự kiện mây sét sà xuống khu đất với độ trễ 0ms, tự động cất trứng/thú về túi đồ an toàn trước khi sét đánh vỡ.
+* **⏱️ Căn Giờ Né Sét Linh Hoạt:** Tự động thu hoạch trước thời điểm sét đánh (tùy chọn 0.5s - 2.5s hoặc tức thời 0ms).
+* **🦖 Auto Thu Hoạch Thú Khi Đã Ấp Xong:** Tự động thu hoạch các con thú đã ấp thành công để tích lũy giá trị.
+
+### 💰 **4. Tối Ưu Kinh Tế & Thu Hoạch Tiền**
+* **💰 Auto Hút Tiền & Kim Cương (Auto Collect Cash):** Tự động gom toàn bộ tiền mặt ($/s) sinh ra trên khu đất để tái đầu tư mua trứng sông xịn hơn.
+* **🏷️ Auto Bán Thú (Auto Sell):** Bán các con thú đã thu hoạch để đổi lấy tiền mặt nâng cấp trang trại.
+* **🗑️ Auto Dọn Túi (Auto Trash):** Tự lọc và vứt các quả trứng rác phẩm cấp thấp (Common, Rare) để giữ chỗ cho trứng Supreme/Godly.
+
+### 👁️ **5. 3D Egg ESP & Sky Beacons**
+* **📦 3D ESP Xuyên Tường:** Hiển thị khung Highlight, tên trứng, phẩm cấp và khoảng cách (mét) theo thời gian thực.
+* **🌌 Sky Beacon (Cột Sáng Neon Lên Trời):** Chiếu cột sáng thẳng lên trời cho các trứng xịn (Supreme, Secret, Divine, Mythical...).
+* **⚡ Chế Độ Siêu Mượt 60 FPS:** Khử bóng đổ và hiệu ứng nặng, treo máy nhiều acc trên điện thoại mượt mà không nóng máy.
+
+### 🏃💨 **6. Tiện Ích & Tốc Độ**
+* **⚡ Speed Slider (WalkSpeed):** Tăng tốc di chuyển 60 - 250 studs/s.
 * **🦘 Infinite Jump:** Nhảy vô hạn trên không trung.
-* **👻 Noclip:** Đi xuyên tường, vượt địa hình.
-* **🛡️ Anti-AFK 24/7:** Chống mất kết nối khi treo máy quá 20 phút.
-* **📱 Giao diện Cyberpunk Draggable:** Nút thu nhỏ/mở rộng kéo thả tiện lợi cho cả điện thoại (Touch) và PC.
+* **👻 Noclip:** Đi xuyên mọi vật cản.
+* **🛡️ Anti-AFK 24/7:** Chống disconnect khi treo máy xuyên đêm.
+* **📱 Giao diện Cyberpunk Draggable:** Nút thu nhỏ/mở rộng tiện lợi cho cả điện thoại (Touch) và PC.
 
 ---
 

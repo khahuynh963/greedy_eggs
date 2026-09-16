@@ -1,24 +1,15 @@
 --[[
     ===================================================================
-    🥚 GREEDY EGGS - ULTIMATE AUTO HUB V2.0 (PRO REWRITE)
+    🥚 TRỨNG THAM LAM (GREEDY EGGS) - ULTIMATE AUTO HUB V2.2
     Game: Greedy Eggs 🥚 by Random Ahhh Games
-    Tối ưu hóa hiệu năng 60 FPS: Siêu Mượt, Không Giật Lag!
-    Tương thích 100% Delta Executor (Android & PC), Wave, Codex, Fluxus.
     
-    TÍNH NĂNG CHÍNH ĐÃ VIẾT LẠI & TỐI ƯU TOÀN DIỆN:
-      1. 🛒 AUTO MUA TRỨNG TRÊN SÔNG (RIVER AUTO BUY):
-         - Quét toàn bộ trứng trôi trên sông (bãi đá sông) theo thời gian thực.
-         - Hỗ trợ Mua Tất Cả (Buy All) hoặc Lọc Mua theo Độ Hiếm (Common -> Supreme).
-         - Tính năng River Proximity Assist: Lướt nhẹ nhặt trứng sông chuẩn 100%.
-      2. 🥚 AUTO TRỒNG & THU HOẠCH (AUTO PLANT & HARVEST):
-         - Tự động lấy trứng từ túi đồ (Common, Advanced, Legendary...) gieo vào bệ đất.
-         - Tự động bơm đồ ăn may mắn (Basic -> Magic +250% Luck).
-         - Theo dõi thời gian lớn tối đa của trứng và tự động thu hoạch.
-      3. 🛡️ KHIÊN CHỐNG SÉT 24/7 & NÉ SÉT SIÊU TỐC:
-         - Tự động phát hiện đám mây sét / tia sét sà xuống bệ trứng.
-         - Thu hoạch né sét vào túi đồ an toàn (0ms - 2.5s) trước khi sét đánh vỡ trứng!
-      4. 💰 KINH TẾ & TIỆN ÍCH:
-         - Tự nhặt Cash/s, tự trộm trứng cuối map, tự bán, 3D ESP & Sky Beacon.
+    🎮 ĐÚNG 100% THEO CƠ CHẾ GỐC CỦA GAME:
+      1. 🥚 Mua một quả trứng từ con sông (Auto Buy River Eggs)
+      2. 🌱 Trồng nó trong khu đất của bạn (Auto Plant into Plot)
+      3. 🥚 Xem trứng của bạn phát triển (Auto Grow Eggs)
+      4. 🦖 Ấp những con vật điên rồ (Hatch Crazy Animals)
+      5. ⚡ Thu hoạch trước khi sét đánh! (Harvest Before Lightning Strikes)
+      6. 💰 Bán con vật & Tự hút tiền Cash/s để tái đầu tư trứng xịn hơn
     ===================================================================
 --]]
 
@@ -74,26 +65,25 @@ end)
 
 -- ── State Variables ──
 local State = {
-    -- 1. River Auto Buy
-    AutoBuy = true, -- Mặc định bật để tự động gom trứng
-    AutoBuyAll = true, -- Mua tất cả trứng trôi qua
+    -- 1. Mua Trứng Từ Con Sông (River Auto Buy)
+    AutoBuy = true,
+    AutoBuyAll = true,
     BuyDelayIndex = 2,
     BuyDelay = 0.15,
-    RiverProximityAssist = true, -- Đảm bảo nhặt trúng 100%
+    RiverProximityAssist = true,
 
-    -- 2. Farming & Planting
+    -- 2. Trồng Trứng & Thu Hoạch Né Sét (Plant & Harvest)
     AutoPlant = false,
-    LightningShield247 = true, -- Khiên chống sét độc lập 24/7
+    LightningShield247 = true, -- Khiên bảo vệ độc lập 24/7
     AutoDodgeLightning = true,
     DodgeLeadTimeIndex = 6, -- 2.0s
     GrowthWaitIndex = 4, -- 15s
 
-    -- 3. Food & Luck
+    -- 3. Thức Ăn May Mắn (Luck Food)
     AutoFood = true,
     SelectedFoodIndex = 1, -- Basic (+37% Free)
 
-    -- 4. Stealing Eggs & Economy
-    AutoStealEndMap = false,
+    -- 4. Bán Con Vật & Thu Tiền (Economy)
     AutoCollectCash = true,
     AutoSell = false,
     AutoTrash = false,
@@ -169,7 +159,7 @@ local function getHumanoid()
     return char and char:FindFirstChildOfClass("Humanoid")
 end
 
--- ── Plot Detection Engine (Plot_<UserId>) ──
+-- ── Plot Detection Engine (Khu Đất Của Bạn) ──
 local cachedMyPlot = nil
 
 local function getMyPlot()
@@ -183,7 +173,6 @@ local function getMyPlot()
     local targetPlotName = "Plot_" .. pId
 
     pcall(function()
-        -- 1. Search inside Workspace.Plots
         local plotsFolder = Workspace:FindFirstChild("Plots") or Workspace:FindFirstChild("Bases") or Workspace:FindFirstChild("Islands") or Workspace:FindFirstChild("Farms")
         if plotsFolder then
             local tycoons = plotsFolder:FindFirstChild("Tycoons") or plotsFolder:FindFirstChild("PlotSlots") or plotsFolder:FindFirstChild("Plots")
@@ -218,7 +207,6 @@ local function getMyPlot()
             end
         end
 
-        -- 2. Direct search in Workspace
         local directWs = Workspace:FindFirstChild(targetPlotName)
         if directWs then cachedMyPlot = directWs return end
 
@@ -229,7 +217,6 @@ local function getMyPlot()
             end
         end
 
-        -- 3. Deep search for Plot_<UserId>
         for _, desc in ipairs(Workspace:GetDescendants()) do
             if (desc:IsA("Model") or desc:IsA("Folder")) and desc.Name == targetPlotName then
                 cachedMyPlot = desc return
@@ -336,7 +323,7 @@ local function triggerPrompt(prompt)
     end)
 end
 
--- ── 🛒 1. RIVER EGG PROMPTS DETECTOR (SÔNG MUA TRỨNG) ──
+-- ── 🛒 1. MUA TRỨNG TỪ CON SÔNG (RIVER BUY DETECTOR) ──
 local function getRiverPrompts()
     local riverPrompts = {}
     local myPlot = getMyPlot()
@@ -346,20 +333,17 @@ local function getRiverPrompts()
             if prompt:IsA("ProximityPrompt") then
                 local parent = prompt.Parent
                 if parent and not isOtherPlayerPlot(parent) then
-                    -- Không phải nằm trong plot của chính mình
                     if not (myPlot and (parent == myPlot or parent:IsDescendantOf(myPlot))) then
                         local act = (prompt.ActionText or ""):lower()
                         local obj = (prompt.ObjectText or ""):lower()
                         local pName = parent.Name:lower()
 
-                        -- Kiểm tra từ khóa mua hoặc trứng trôi sông
                         local isRiverBuy = act:find("buy") or act:find("purchase") or act:find("mua")
                                         or act:find("take") or act:find("claim") or act:find("grab") or act:find("pick")
                                         or obj:find("buy") or obj:find("egg") or obj:find("trứng")
                                         or pName:find("egg") or pName:find("conveyor") or pName:find("river")
                                         or pName:find("belt") or pName:find("stream")
 
-                        -- Kiểm tra model cha
                         if not isRiverBuy then
                             local m = parent
                             while m and not m:IsA("Model") and m ~= Workspace do
@@ -382,7 +366,7 @@ local function getRiverPrompts()
     return riverPrompts
 end
 
--- ── 🥚 2. EGG PAD PROMPTS DETECTOR (BỆ ĐẤT GIEO & THU HOẠCH) ──
+-- ── 🌱 2. TRỒNG TRỨNG VÀO KHU ĐẤT (EGG PAD DETECTOR) ──
 local function getEggPadPrompts(plot)
     if not plot then
         plot = getMyPlot()
@@ -397,7 +381,6 @@ local function getEggPadPrompts(plot)
 
     local candidatePrompts = {}
 
-    -- Quét trong myPlot
     if plot then
         pcall(function()
             for _, desc in ipairs(plot:GetDescendants()) do
@@ -408,7 +391,6 @@ local function getEggPadPrompts(plot)
         end)
     end
 
-    -- Quét quanh 25 studs của nhân vật (bệ đất nơi đang đứng)
     pcall(function()
         local hrp = getRootPart()
         if hrp then
@@ -443,13 +425,13 @@ local function getEggPadPrompts(plot)
         end
 
         if not isExcluded then
-            -- 1. Nút Thu Hoạch (Harvest)
+            -- Nút Thu Hoạch (Harvest/Ấp con vật):
             local isHarvest = act:find("harvest") or act:find("take") or act:find("pick") 
                            or act:find("claim") or act:find("hatch") or act:find("collect") 
                            or act:find("grab") or act:find("thu") or act:find("ấp") 
                            or act:find("lấy") or act:find("gặt") or act:find("nhặt")
 
-            -- 2. Nút Gieo Trứng (Plant)
+            -- Nút Gieo Trứng (Plant):
             local isPlant = not isHarvest and (act:find("plant") or act:find("place") or act:find("deposit") 
                                             or act:find("put") or act:find("sow") or act:find("gieo") 
                                             or act:find("đặt") or act:find("trồng") 
@@ -476,7 +458,7 @@ local function getEggPadPrompts(plot)
     return plantPrompt, harvestPrompt, padPart
 end
 
--- ── ⚡ 3. LIGHTNING THREAT DETECTOR (PHÁT HIỆN SÉT ĐÁNH) ──
+-- ── ⚡ 3. PHÁT HIỆN SÉT ĐÁNH VÀO KHU ĐẤT ──
 local lastThreatDetectedTime = 0
 
 local function checkLightningThreat(padPart, plot, plantStartTime)
@@ -560,7 +542,7 @@ UserInputService.JumpRequest:Connect(function()
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- 🎨 MODERN V28 OBSIDIAN GUI
+-- 🎨 MODERN V28 OBSIDIAN GUI (TRỨNG THAM LAM)
 -- ═══════════════════════════════════════════════════════════
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -597,7 +579,7 @@ local function makeDraggable(frame, handle)
     end)
 end
 
--- Floating Icon Button
+-- Floating Button
 local ToggleIcon = Instance.new("TextButton")
 ToggleIcon.Name = "ToggleIcon"
 ToggleIcon.Size = UDim2.new(0, 52, 0, 52)
@@ -619,7 +601,7 @@ IconStroke.Parent = ToggleIcon
 
 makeDraggable(ToggleIcon)
 
--- Main Hub Window
+-- Main Frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 340, 0, 540)
@@ -660,7 +642,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -76, 0, 22)
 Title.Position = UDim2.new(0, 12, 0, 4)
 Title.BackgroundTransparency = 1
-Title.Text = "🥚 GREEDY EGGS - AUTO HUB V2.0"
+Title.Text = "🥚 TRỨNG THAM LAM - AUTO V2.2"
 Title.TextColor3 = Color3.fromRGB(255, 200, 50)
 Title.TextSize = 12
 Title.Font = Enum.Font.GothamBold
@@ -671,9 +653,9 @@ local SubTitle = Instance.new("TextLabel")
 SubTitle.Size = UDim2.new(1, -76, 0, 14)
 SubTitle.Position = UDim2.new(0, 12, 0, 26)
 SubTitle.BackgroundTransparency = 1
-SubTitle.Text = "🛒 Mua Sông Siêu Tốc & Auto Trồng / Né Sét"
+SubTitle.Text = "⚡ Mua Trứng Sông • Trồng • Ấp • Thu Hoạch Né Sét"
 SubTitle.TextColor3 = Color3.fromRGB(140, 155, 180)
-SubTitle.TextSize = 10
+SubTitle.TextSize = 9.5
 SubTitle.Font = Enum.Font.Gotham
 SubTitle.TextXAlignment = Enum.TextXAlignment.Left
 SubTitle.Parent = Header
@@ -891,7 +873,7 @@ local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, -28, 1, 0)
 StatusLabel.Position = UDim2.new(0, 24, 0, 0)
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "Sẵn sàng (Greedy Eggs Hub V2.0)."
+StatusLabel.Text = "Sẵn sàng (Trứng Tham Lam V2.2)."
 StatusLabel.TextColor3 = Color3.fromRGB(200, 215, 235)
 StatusLabel.TextSize = 10
 StatusLabel.Font = Enum.Font.Gotham
@@ -903,18 +885,18 @@ local function setStatus(txt)
 end
 
 -- ═══════════════════════════════════════════════════════════
--- SECTION 1: 🛒 AUTO MUA TRỨNG TRÊN SÔNG (RIVER AUTO BUY)
+-- SECTION 1: 🛒 MUA TRỨNG TỪ CON SÔNG (RIVER AUTO BUY)
 -- ═══════════════════════════════════════════════════════════
-createSectionHeader("🛒 AUTO MUA TRỨNG TRÊN SÔNG", Color3.fromRGB(255, 200, 50))
+createSectionHeader("🛒 MUA TRỨNG TỪ CON SÔNG", Color3.fromRGB(255, 200, 50))
 
-createToggleButton("🛒 Bật Auto Mua Trứng Trên Sông", State.AutoBuy, function(v)
+createToggleButton("🛒 Bật Auto Mua Trứng Từ Con Sông", State.AutoBuy, function(v)
     State.AutoBuy = v
-    setStatus(v and "Đang tự động mua trứng trôi trên sông..." or "Đã dừng Auto Mua Trứng.")
+    setStatus(v and "Đang tự động mua trứng trôi trên sông..." or "Đã dừng Auto Mua Trứng Sông.")
 end)
 
-createToggleButton("⚡ Auto Mua Tất Cả Trứng (Buy All)", State.AutoBuyAll, function(v)
+createToggleButton("⚡ Mua Tất Cả Trứng Sông (Buy All)", State.AutoBuyAll, function(v)
     State.AutoBuyAll = v
-    setStatus(v and "Chế độ: Mua toàn bộ trứng trôi qua sông!" or "Chế độ: Mua theo độ hiếm chọn lọc.")
+    setStatus(v and "Chế độ: Mua sạch mọi quả trứng trên sông!" or "Chế độ: Chỉ mua trứng theo độ hiếm chọn lọc.")
 end)
 
 createToggleButton("🚀 River Assist (Lướt Nhặt Trứng Chuẩn 100%)", State.RiverProximityAssist, function(v)
@@ -929,9 +911,9 @@ createActionButton("⏱️ Tốc Độ Quét Mua Trứng Sông", "Hiện tại: 
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- SECTION 2: 🥚 AUTO TRỒNG & THU HOẠCH (PLANT & HARVEST)
+-- SECTION 2: 🌱 TRỒNG TRỨNG VÀO KHU ĐẤT & THU HOẠCH NÉ SÉT
 -- ═══════════════════════════════════════════════════════════
-createSectionHeader("🥚 AUTO TRỒNG & THU HOẠCH NÉ SÉT", Color3.fromRGB(0, 200, 255))
+createSectionHeader("🌱 TRỒNG VÀO KHU ĐẤT & THU HOẠCH NÉ SÉT", Color3.fromRGB(0, 200, 255))
 
 createToggleButton("🌱 Bật Auto Trồng & Thu Hoạch (Auto Farm)", State.AutoPlant, function(v)
     State.AutoPlant = v
@@ -949,7 +931,7 @@ createActionButton("⏱️ Căn Giờ Thu Hoạch Né Sét", "Thu hoạch trư�
     lbl.Text = "Thu hoạch trước khi sét đánh: [ " .. tostring(ALL_DODGE_TIMES[State.DodgeLeadTimeIndex]) .. "s ]"
 end)
 
-createActionButton("🌱 Thời Gian Nuôi Trứng Tối Đa", "Thu hoạch sau khi nuôi: [ " .. tostring(ALL_GROWTH_TIMES[State.GrowthWaitIndex]) .. "s ]", Color3.fromRGB(0, 255, 170), function(btn, lbl)
+createActionButton("🌱 Thời Gian Nuôi Trứng Lớn Tối Đa", "Thu hoạch sau khi nuôi: [ " .. tostring(ALL_GROWTH_TIMES[State.GrowthWaitIndex]) .. "s ]", Color3.fromRGB(0, 255, 170), function(btn, lbl)
     State.GrowthWaitIndex = State.GrowthWaitIndex + 1
     if State.GrowthWaitIndex > #ALL_GROWTH_TIMES then State.GrowthWaitIndex = 1 end
     lbl.Text = "Thu hoạch sau khi nuôi: [ " .. tostring(ALL_GROWTH_TIMES[State.GrowthWaitIndex]) .. "s ]"
@@ -962,20 +944,15 @@ createActionButton("🥩 Thức Ăn May Mắn (Luck Food)", ALL_FOOD_DISPLAYS[St
 end)
 
 -- ═══════════════════════════════════════════════════════════
--- SECTION 3: 🦹 TRỘM TRỨNG & KINH TẾ (SELL & CASH)
+-- SECTION 3: 💰 BÁN CON VẬT & THU TIỀN (ECONOMY)
 -- ═══════════════════════════════════════════════════════════
-createSectionHeader("🦹 TRỘM TRỨNG & KINH TẾ", Color3.fromRGB(255, 80, 120))
+createSectionHeader("💰 BÁN CON VẬT & THU TIỀN", Color3.fromRGB(255, 180, 50))
 
-createToggleButton("🏃 Tự Chạy Trộm Trứng Cuối Map", State.AutoStealEndMap, function(v)
-    State.AutoStealEndMap = v
-    setStatus(v and "Đang bay tới bãi trộm cuối map săn trứng..." or "Đã dừng Auto Trộm Trứng.")
-end)
-
-createToggleButton("💰 Tự Hút Tiền Xu / Cash/s Trên Plot", State.AutoCollectCash, function(v)
+createToggleButton("💰 Tự Hút Tiền Xu / Cash Trên Khu Đất", State.AutoCollectCash, function(v)
     State.AutoCollectCash = v
 end)
 
-createToggleButton("💵 Tự Bán Thú/Trứng (Auto Sell)", State.AutoSell, function(v)
+createToggleButton("💵 Tự Động Bán Con Vật (Auto Sell)", State.AutoSell, function(v)
     State.AutoSell = v
 end)
 
@@ -1156,7 +1133,7 @@ end)
 -- 🔄 BACKGROUND AUTO WORKERS (ZERO LAG & HYPER RESPONSIVE)
 -- ═══════════════════════════════════════════════════════════
 
--- 1. KHIÊN BẮT SÉT TỨC THÌ (Instant DescendantAdded 0ms)
+-- 1. KHIÊN BẮT SÉT TỨC THÌ (0ms)
 Workspace.DescendantAdded:Connect(function(desc)
     pcall(function()
         local dName = desc.Name:lower()
@@ -1202,7 +1179,7 @@ task.spawn(function()
     end
 end)
 
--- 3. 🛒 AUTO MUA TRỨNG TRÊN SÔNG (RIVER AUTO BUY ENGINE)
+-- 3. 🛒 MUA MỘT QUẢ TRỨNG TỪ CON SÔNG (RIVER AUTO BUY)
 task.spawn(function()
     while true do
         local delayTime = State.BuyDelay or 0.15
@@ -1239,7 +1216,6 @@ task.spawn(function()
 
                         if State.RiverProximityAssist and hrp and promptPos then
                             local dist = (hrp.Position - promptPos).Magnitude
-                            -- Nếu hơi xa (> 10 studs), lướt nhẹ đến nhặt rồi về lại plot
                             if dist > 10 and dist < 120 then
                                 local origCFrame = hrp.CFrame
                                 hrp.CFrame = CFrame.new(promptPos + Vector3.new(0, 3, 0))
@@ -1247,7 +1223,6 @@ task.spawn(function()
                                 triggerPrompt(prompt)
                                 task.wait(0.04)
 
-                                -- Quay về bệ đất nếu đang AutoPlant
                                 if State.AutoPlant then
                                     local myPlot = getMyPlot()
                                     local _, _, padPart = getEggPadPrompts(myPlot)
@@ -1274,7 +1249,7 @@ task.spawn(function()
     end
 end)
 
--- 4. 🥚 AUTO GIEO TRỨNG & THU HOẠCH NÉ SÉT (AUTOPLANT & HARVEST ENGINE)
+-- 4. 🌱 TRỒNG TRỨNG VÀO KHU ĐẤT & THU HOẠCH NÉ SÉT (PLANT & HARVEST ENGINE)
 local plantStartTime = 0
 
 task.spawn(function()
@@ -1288,7 +1263,7 @@ task.spawn(function()
                 local targetGrowthTime = ALL_GROWTH_TIMES[State.GrowthWaitIndex] or 15
                 local hrp = getRootPart()
 
-                -- 4.1 NẾU TRỨNG ĐANG TRÊN BỆ (THEO DÕI LỚN & NÉ SÉT ĐỂ THU HOẠCH)
+                -- 4.1 TRỨNG ĐANG TRÊN KHU ĐẤT: THEO DÕI PHÁT TRIỂN & THU HOẠCH TRƯỚC KHI SÉT ĐÁNH!
                 if harvestPrompt then
                     if plantStartTime == 0 then plantStartTime = os.clock() end
                     local elapsedTime = os.clock() - plantStartTime
@@ -1296,10 +1271,10 @@ task.spawn(function()
 
                     if hasThreat and State.AutoDodgeLightning then
                         if strikeTime and strikeTime > targetDodgeLead then
-                            setStatus("⚡ SÉT CỦA BẠN (còn " .. string.format("%.1f", strikeTime) .. "s)... Căn né trước " .. targetDodgeLead .. "s")
+                            setStatus("⚡ SÉT ĐANG ĐẾM NGƯỢC (còn " .. string.format("%.1f", strikeTime) .. "s)... Căn né trước " .. targetDodgeLead .. "s")
                         else
                             local info = strikeTime and (" (còn " .. string.format("%.1f", strikeTime) .. "s)") or ""
-                            setStatus("⚡ SÉT ĐÁNH VÀO TỔ TRỨNG" .. info .. "! Thu hoạch NÉ SÉT ngay!")
+                            setStatus("⚡ SÉT SẮP ĐÁNH" .. info .. "! Thu hoạch NÉ SÉT vào túi đồ ngay!")
 
                             if hrp and padPart then
                                 local padPos = padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position)
@@ -1313,8 +1288,9 @@ task.spawn(function()
                             task.wait(0.4)
                         end
                     else
+                        -- Không có sét -> Nuôi trứng phát triển để ấp những con vật điên rồ!
                         if elapsedTime >= targetGrowthTime then
-                            setStatus("🥚 Trứng đã nuôi đủ " .. math.floor(elapsedTime) .. "s -> Thu hoạch thành công!")
+                            setStatus("🦖 Đã ấp thành con vật hoàn chỉnh (" .. math.floor(elapsedTime) .. "s) -> Thu hoạch!")
 
                             if hrp and padPart then
                                 local padPos = padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position)
@@ -1327,12 +1303,12 @@ task.spawn(function()
                             plantStartTime = 0
                             task.wait(0.4)
                         else
-                            setStatus("🥚 Đang nuôi trứng (" .. math.floor(elapsedTime) .. "s/" .. targetGrowthTime .. "s)... Theo dõi sét ⚡")
+                            setStatus("🥚 Đang xem trứng phát triển (" .. math.floor(elapsedTime) .. "s/" .. targetGrowthTime .. "s)... Canh chừng sét ⚡")
                             task.wait(0.1)
                         end
                     end
                 elseif plantPrompt then
-                    -- 4.2 BỆ ĐANG TRỐNG -> TIẾN HÀNH LẤY TRỨNG TỪ TÚI ĐỒ RA GIEO
+                    -- 4.2 BỆ TRỐNG -> LẤY TRỨNG VỪA MUA TỪ CON SÔNG RA TRỒNG VÀO KHU ĐẤT
                     plantStartTime = 0
                     local bp = LocalPlayer:FindFirstChild("Backpack")
                     local char = getCharacter()
@@ -1362,7 +1338,6 @@ task.spawn(function()
                                 end
                             end
                         end
-                        -- Fallback nếu tên tool không có chữ egg
                         if not eggTool and bp then
                             for _, t in ipairs(bp:GetChildren()) do
                                 if t:IsA("Tool") then
@@ -1387,16 +1362,16 @@ task.spawn(function()
                             end
                         end
 
-                        setStatus("🌱 Đang gieo trứng: " .. eggTool.Name .. "...")
+                        setStatus("🌱 Trồng trứng vào khu đất: " .. eggTool.Name .. "...")
                         triggerPrompt(plantPrompt)
                         task.wait(0.35)
                     else
-                        setStatus("⏳ Túi đồ hết trứng! Đang chờ mua thêm từ sông...")
+                        setStatus("⏳ Túi đồ hết trứng! Đang tự động mua thêm từ con sông...")
                         task.wait(0.4)
                     end
                 else
                     plantStartTime = 0
-                    setStatus("🔍 Đang tìm bệ trứng trên Plot của bạn...")
+                    setStatus("🔍 Đang tìm khu đất của bạn...")
                     task.wait(0.5)
                 end
             end)
@@ -1404,47 +1379,7 @@ task.spawn(function()
     end
 end)
 
--- 5. AUTO TRỘM TRỨNG CUỐI MAP
-task.spawn(function()
-    while true do
-        task.wait(1.5)
-        if State.AutoStealEndMap then
-            pcall(function()
-                local hrp = getRootPart()
-                if not hrp then return end
-
-                local bestEggPart = nil
-                local bestPrompt = nil
-                local bestZ = -9e9
-
-                for _, prompt in ipairs(Workspace:GetDescendants()) do
-                    if prompt:IsA("ProximityPrompt") then
-                        local act = (prompt.ActionText or ""):lower()
-                        local obj = (prompt.ObjectText or ""):lower()
-                        if (act:find("steal") or act:find("trộm") or act:find("pick") or act:find("take") or obj:find("egg")) and not isOtherPlayerPlot(prompt.Parent) then
-                            local part = prompt.Parent:IsA("BasePart") and prompt.Parent or prompt.Parent:FindFirstChildWhichIsA("BasePart")
-                            if part and part.Position.Z > bestZ then
-                                bestZ = part.Position.Z
-                                bestEggPart = part
-                                bestPrompt = prompt
-                            end
-                        end
-                    end
-                end
-
-                if bestEggPart and bestPrompt then
-                    setStatus("🦹 Đang bay đến trộm trứng cuối map...")
-                    hrp.CFrame = bestEggPart.CFrame * CFrame.new(0, 3.5, 0)
-                    task.wait(0.2)
-                    triggerPrompt(bestPrompt)
-                    task.wait(0.3)
-                end
-            end)
-        end
-    end
-end)
-
--- 6. AUTO COLLECT CASH/S ORBS
+-- 5. 💰 AUTO HÚT TIỀN CASH/S TRÊN KHU ĐẤT
 task.spawn(function()
     while true do
         task.wait(0.5)
@@ -1463,7 +1398,7 @@ task.spawn(function()
     end
 end)
 
--- 7. ESP REFRESH LOOP
+-- 6. ESP REFRESH LOOP
 task.spawn(function()
     while true do
         task.wait(4)
@@ -1478,4 +1413,4 @@ task.defer(function()
     if State.EggESP then updateESP(true) end
 end)
 
-setStatus("✅ Đã khởi chạy Greedy Eggs Hub V2.0 thành công!")
+setStatus("✅ Đã khởi chạy Trứng Tham Lam V2.2 thành công!")
