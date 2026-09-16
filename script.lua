@@ -66,14 +66,14 @@ end)
 -- ── State Variables ──
 local State = {
     -- 1. Mua Trứng Từ Con Sông (River Auto Buy)
-    AutoBuy = false, -- Tắt mặc định để máy siêu mượt
+    AutoBuy = true, -- BẬT MẶC ĐỊNH
     AutoBuyAll = true,
     BuyDelayIndex = 3, -- 0.3s
     BuyDelay = 0.3,
-    RiverProximityAssist = false,
+    RiverProximityAssist = true, -- BẬT HỖ TRỢ TIẾP CẬN ĐỂ MUA ĂN NGAY 100%
 
     -- 2. Trồng Trứng & Thu Hoạch Né Sét (Plant & Harvest)
-    AutoPlant = false,
+    AutoPlant = true, -- BẬT MẶC ĐỊNH
     LightningShield247 = true, -- Khiên bảo vệ độc lập 24/7 (Siêu tối ưu 0ms, Zero Lag)
     AutoDodgeLightning = true,
     DodgeLeadTimeIndex = 6, -- 2.0s
@@ -335,53 +335,62 @@ end
 
 -- ── 🛒 1. MUA TRỨNG TỪ CON SÔNG (RIVER BUY DETECTOR) ──
 local function getRiverPrompts()
-    local now = os.clock()
-    if (now - lastRiverScanTime) < 0.75 and #cachedRiverPrompts > 0 then
-        local valid = {}
-        for _, p in ipairs(cachedRiverPrompts) do
-            if p and p.Parent then table.insert(valid, p) end
-        end
-        if #valid > 0 then return valid end
-    end
-    lastRiverScanTime = now
-
     local riverPrompts = {}
     local myPlot = getMyPlot()
 
     pcall(function()
-        local riverContainer = Workspace:FindFirstChild("River") or Workspace:FindFirstChild("Conveyor") 
-                            or Workspace:FindFirstChild("Eggs") or Workspace:FindFirstChild("EggSpawns") 
-                            or Workspace:FindFirstChild("Stream")
-        
-        local searchTargets = {}
-        if riverContainer then
-            table.insert(searchTargets, riverContainer)
-        else
-            for _, child in ipairs(Workspace:GetChildren()) do
-                local n = child.Name:lower()
-                if (n:find("river") or n:find("conveyor") or n:find("belt") or n:find("stream") or n:find("egg")) 
-                   and (child:IsA("Folder") or child:IsA("Model")) then
-                    if not isOtherPlayerPlot(child) and child ~= myPlot then
-                        table.insert(searchTargets, child)
+        -- 1. Ưu tiên quét thư mục ConveyorOffers / River / Eggs
+        local offersFolder = Workspace:FindFirstChild("ConveyorOffers") 
+                          or Workspace:FindFirstChild("EggOffers") 
+                          or Workspace:FindFirstChild("RiverOffers") 
+                          or Workspace:FindFirstChild("Offers")
+                          or Workspace:FindFirstChild("River")
+                          or Workspace:FindFirstChild("Conveyor")
+                          or Workspace:FindFirstChild("Eggs")
+                          or Workspace:FindFirstChild("EggSpawns")
+
+        if offersFolder then
+            for _, desc in ipairs(offersFolder:GetDescendants()) do
+                if desc:IsA("ProximityPrompt") then
+                    local act = (desc.ActionText or ""):lower()
+                    local obj = (desc.ObjectText or ""):lower()
+                    if act:find("buy") or act:find("purchase") or act:find("mua") 
+                       or act:find("claim") or act:find("take") or act == "" 
+                       or obj:find("buy") or obj:find("egg") or obj:find("trứng") then
+                        table.insert(riverPrompts, desc)
                     end
                 end
             end
         end
 
-        if #searchTargets > 0 then
-            for _, target in ipairs(searchTargets) do
-                for _, prompt in ipairs(target:GetDescendants()) do
-                    if prompt:IsA("ProximityPrompt") then
-                        table.insert(riverPrompts, prompt)
+        -- 2. Quét các Folder / Model liên quan đến sông trong Workspace
+        if #riverPrompts == 0 then
+            for _, child in ipairs(Workspace:GetChildren()) do
+                local cName = child.Name:lower()
+                if (cName:find("conveyor") or cName:find("river") or cName:find("offer") or cName:find("stream") or cName:find("egg"))
+                   and child ~= myPlot and not isOtherPlayerPlot(child) then
+                    for _, desc in ipairs(child:GetDescendants()) do
+                        if desc:IsA("ProximityPrompt") then
+                            local act = (desc.ActionText or ""):lower()
+                            if act:find("buy") or act:find("purchase") or act:find("mua") or act:find("claim") or act:find("take") or act == "" then
+                                table.insert(riverPrompts, desc)
+                            end
+                        end
                     end
                 end
             end
-        else
-            for _, child in ipairs(Workspace:GetChildren()) do
-                if child:IsA("Model") and not isOtherPlayerPlot(child) and child ~= myPlot then
-                    for _, d in ipairs(child:GetChildren()) do
-                        if d:IsA("ProximityPrompt") then
-                            table.insert(riverPrompts, d)
+        end
+
+        -- 3. Fallback: Quét toàn bộ ProximityPrompt có ActionText 'Buy' (loại trừ Plot người khác & Plot mình)
+        if #riverPrompts == 0 then
+            for _, desc in ipairs(Workspace:GetDescendants()) do
+                if desc:IsA("ProximityPrompt") and not isOtherPlayerPlot(desc.Parent) then
+                    local act = (desc.ActionText or ""):lower()
+                    local pName = desc.Parent and desc.Parent.Name:lower() or ""
+                    if (act:find("buy") or act:find("purchase") or act:find("mua")) 
+                       and not (pName:find("upgrade") or pName:find("sign") or pName:find("skin") or pName:find("gamepass")) then
+                        if not (myPlot and desc:IsDescendantOf(myPlot)) then
+                            table.insert(riverPrompts, desc)
                         end
                     end
                 end
@@ -389,70 +398,117 @@ local function getRiverPrompts()
         end
     end)
 
-    cachedRiverPrompts = riverPrompts
     return riverPrompts
 end
 
 -- ── 🌱 2. TRỒNG TRỨNG VÀO KHU ĐẤT (EGG PAD DETECTOR) ──
 local function getEggPadPrompts(plot)
-    if cachedPadPart and cachedPadPart.Parent and ((cachedPlantPrompt and cachedPlantPrompt.Parent) or (cachedHarvestPrompt and cachedHarvestPrompt.Parent)) then
-        return cachedPlantPrompt, cachedHarvestPrompt, cachedPadPart
-    end
-
-    if not plot then
-        plot = getMyPlot()
-    end
-    if not plot then return nil, nil, nil end
-
-    local plantPrompt, harvestPrompt, padPart = nil, nil, nil
+    plot = plot or getMyPlot()
+    local plantPrompt, harvestPrompt = nil, nil
 
     local excludeKeywords = {
         "trash", "bin", "dump", "sell", "buy", "purchase", "mua", 
-        "money", "cash", "coin", "collect", "gom", "store", "shop"
+        "money", "cash", "coin", "collect money", "collect cash", "gom", "store", "shop", "skin", "upgrade"
     }
 
-    pcall(function()
-        for _, desc in ipairs(plot:GetDescendants()) do
-            if desc:IsA("ProximityPrompt") then
-                local act = (desc.ActionText or ""):lower()
-                local obj = (desc.ObjectText or ""):lower()
-                local isExcluded = false
-                for _, kw in ipairs(excludeKeywords) do
-                    if act:find(kw) or obj:find(kw) then isExcluded = true break end
-                end
+    -- 1. Nếu đã có cachedPadPart hợp lệ, đọc prompt trực tiếp từ bệ (chỉ 2-5 part, 0ms, không bao giờ bị khóa cache!)
+    if cachedPadPart and cachedPadPart.Parent then
+        pcall(function()
+            for _, desc in ipairs(cachedPadPart:GetDescendants()) do
+                if desc:IsA("ProximityPrompt") and desc.Enabled then
+                    local act = (desc.ActionText or ""):lower()
+                    local obj = (desc.ObjectText or ""):lower()
 
-                if not isExcluded then
-                    local isHarvest = act:find("harvest") or act:find("take") or act:find("pick") 
-                                   or act:find("claim") or act:find("hatch") or act:find("thu") 
-                                   or act:find("ấp") or act:find("lấy") or act:find("gặt")
-                    local isPlant = not isHarvest and (act:find("plant") or act:find("place") or act:find("deposit") 
-                                                    or act:find("put") or act:find("gieo") or act:find("đặt") or act:find("trồng")
-                                                    or obj:find("pad") or obj:find("plot"))
+                    local isExcluded = false
+                    for _, kw in ipairs(excludeKeywords) do
+                        if act:find(kw) or obj:find(kw) then isExcluded = true break end
+                    end
 
-                    if isHarvest and not harvestPrompt then
-                        harvestPrompt = desc
-                        padPart = desc.Parent
-                    elseif isPlant and not plantPrompt then
-                        plantPrompt = desc
-                        padPart = desc.Parent
+                    if not isExcluded then
+                        if act:find("harvest") or act:find("claim") or act:find("take") or act:find("pick") 
+                           or act:find("hatch") or act:find("collect") or act:find("thu") or act:find("ấp") or act:find("lấy") then
+                            harvestPrompt = desc
+                        elseif act:find("plant") or act:find("place") or act:find("deposit") 
+                            or act:find("put") or act:find("gieo") or act:find("đặt") or act:find("trồng")
+                            or obj:find("pad") or obj:find("grow") or obj:find("soil") or obj:find("plot") then
+                            plantPrompt = desc
+                        end
                     end
                 end
             end
-        end
+        end)
 
-        if not padPart then
-            padPart = plot:FindFirstChild("EggPad") or plot:FindFirstChild("Pad") or plot:FindFirstChild("Soil") or plot:FindFirstChild("GrowPad")
+        if plantPrompt or harvestPrompt then
+            return plantPrompt, harvestPrompt, cachedPadPart
         end
-    end)
-
-    if padPart then
-        cachedPadPart = padPart
-        cachedPadPos = padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position)
     end
-    if plantPrompt then cachedPlantPrompt = plantPrompt end
-    if harvestPrompt then cachedHarvestPrompt = harvestPrompt end
 
-    return plantPrompt, harvestPrompt, padPart
+    -- 2. Tìm bệ đất (GrowPad / EggPad / Soil / PromptAnchor) trong Plot của bạn
+    local foundPad = nil
+    if plot then
+        pcall(function()
+            foundPad = plot:FindFirstChild("GrowPad", true) 
+                    or plot:FindFirstChild("EggPad", true) 
+                    or plot:FindFirstChild("Soil", true) 
+                    or plot:FindFirstChild("Pad", true)
+                    or plot:FindFirstChild("PromptAnchor", true)
+
+            if not foundPad then
+                for _, desc in ipairs(plot:GetDescendants()) do
+                    if desc:IsA("ProximityPrompt") then
+                        local act = (desc.ActionText or ""):lower()
+                        local obj = (desc.ObjectText or ""):lower()
+                        if act:find("plant") or act:find("harvest") or obj:find("grow") or obj:find("pad") or obj:find("egg") then
+                            foundPad = desc.Parent
+                            break
+                        end
+                    end
+                end
+            end
+        end)
+    end
+
+    -- 3. Quét xung quanh nhân vật trong bán kính 35 studs (bệ đất ngay chân người chơi)
+    if not foundPad then
+        local hrp = getRootPart()
+        if hrp then
+            pcall(function()
+                for _, desc in ipairs(Workspace:GetDescendants()) do
+                    if desc:IsA("ProximityPrompt") and not isOtherPlayerPlot(desc.Parent) then
+                        local pPart = desc.Parent
+                        local pos = pPart and (pPart:IsA("BasePart") and pPart.Position or (pPart:IsA("Model") and pPart.PrimaryPart and pPart.PrimaryPart.Position))
+                        if pos and (pos - hrp.Position).Magnitude <= 35 then
+                            local act = (desc.ActionText or ""):lower()
+                            local obj = (desc.ObjectText or ""):lower()
+                            if act:find("plant") or act:find("harvest") or act:find("thu") or act:find("trồng") or obj:find("grow") or obj:find("pad") then
+                                foundPad = pPart
+                                break
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+
+    if foundPad then
+        cachedPadPart = foundPad
+        cachedPadPos = foundPad:IsA("BasePart") and foundPad.Position or (foundPad:IsA("Model") and foundPad.PrimaryPart and foundPad.PrimaryPart.Position)
+
+        for _, desc in ipairs(foundPad:GetDescendants()) do
+            if desc:IsA("ProximityPrompt") and desc.Enabled then
+                local act = (desc.ActionText or ""):lower()
+                local obj = (desc.ObjectText or ""):lower()
+                if act:find("harvest") or act:find("claim") or act:find("take") or act:find("pick") or act:find("hatch") or act:find("collect") or act:find("thu") then
+                    harvestPrompt = desc
+                elseif act:find("plant") or act:find("place") or act:find("deposit") or act:find("gieo") or act:find("đặt") or act:find("trồng") or obj:find("pad") or obj:find("grow") then
+                    plantPrompt = desc
+                end
+            end
+        end
+    end
+
+    return plantPrompt, harvestPrompt, cachedPadPart
 end
 
 -- ── ⚡ 3. PHÁT HIỆN SÉT ĐÁNH VÀO KHU ĐẤT ──
@@ -1161,6 +1217,11 @@ task.spawn(function()
                 local prompts = getRiverPrompts()
                 local hrp = getRootPart()
 
+                if #prompts == 0 then
+                    -- Nếu chưa thấy prompt mua nào trên sông
+                    return
+                end
+
                 for _, prompt in ipairs(prompts) do
                     if not prompt or not prompt.Parent then continue end
                     if isOtherPlayerPlot(prompt.Parent) then continue end
@@ -1183,25 +1244,23 @@ task.spawn(function()
                     end
 
                     if shouldBuy then
-                        local promptPos = prompt.Parent:IsA("BasePart") and prompt.Parent.Position or (targetItem:IsA("Model") and targetItem.PrimaryPart and targetItem.PrimaryPart.Position)
+                        local promptPos = prompt.Parent:IsA("BasePart") and prompt.Parent.Position 
+                                       or (targetItem:IsA("Model") and targetItem.PrimaryPart and targetItem.PrimaryPart.Position)
+                                       or (targetItem:FindFirstChildWhichIsA("BasePart") and targetItem:FindFirstChildWhichIsA("BasePart").Position)
 
                         if State.RiverProximityAssist and hrp and promptPos then
                             local dist = (hrp.Position - promptPos).Magnitude
-                            if dist > 10 and dist < 120 then
+                            local origCFrame = hrp.CFrame
+                            if dist > 8 and dist < 250 then
                                 hrp.CFrame = CFrame.new(promptPos + Vector3.new(0, 3, 0))
-                                task.wait(0.05)
+                                task.wait(0.06)
                                 triggerPrompt(prompt)
-                                task.wait(0.05)
+                                task.wait(0.06)
 
-                                if State.AutoPlant then
-                                    local myPlot = getMyPlot()
-                                    local _, _, padPart = getEggPadPrompts(myPlot)
-                                    if padPart then
-                                        local padPos = cachedPadPos or (padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position))
-                                        if padPos then
-                                            hrp.CFrame = CFrame.new(padPos + Vector3.new(0, 3, 0))
-                                        end
-                                    end
+                                if cachedPadPos then
+                                    hrp.CFrame = CFrame.new(cachedPadPos + Vector3.new(0, 3.5, 0))
+                                else
+                                    hrp.CFrame = origCFrame
                                 end
                             else
                                 triggerPrompt(prompt)
@@ -1210,8 +1269,9 @@ task.spawn(function()
                             triggerPrompt(prompt)
                         end
 
-                        setStatus("🛒 Mua trứng trên sông: [" .. rarity .. "] " .. (targetItem and targetItem.Name or "Egg"))
-                        task.wait(0.1)
+                        setStatus("🛒 Đã mua trứng sông: [" .. rarity .. "] " .. (targetItem and targetItem.Name or "Egg"))
+                        task.wait(0.12)
+                        break -- Mua 1 quả mỗi lượt để gieo trồng ngay
                     end
                 end
             end)
@@ -1224,7 +1284,7 @@ local plantStartTime = 0
 
 task.spawn(function()
     while true do
-        task.wait(0.35)
+        task.wait(0.25)
         if State.AutoPlant then
             pcall(function()
                 local myPlot = getMyPlot()
@@ -1258,20 +1318,31 @@ task.spawn(function()
 
                     if shouldDodge then
                         local info = strikeTime and (" (còn " .. string.format("%.1f", strikeTime) .. "s)") or ""
-                        setStatus("⚡ PHÁT HIỆN SÉT ĐÁNH" .. info .. "! Tự động thu hoạch trứng né sét thành công!")
+                        setStatus("⚡ PHÁT HIỆN SÉT ĐÁNH" .. info .. "! Thu hoạch né sét ngay!")
+                        if hrp and cachedPadPos and (hrp.Position - cachedPadPos).Magnitude > 10 then
+                            hrp.CFrame = CFrame.new(cachedPadPos + Vector3.new(0, 3, 0))
+                        end
                         triggerPrompt(harvestPrompt)
+                        if firetouchinterest and hrp and padPart then
+                            local tp = padPart:IsA("BasePart") and padPart or padPart:FindFirstChildWhichIsA("BasePart")
+                            if tp then
+                                firetouchinterest(hrp, tp, 0)
+                                task.wait(0.01)
+                                firetouchinterest(hrp, tp, 1)
+                            end
+                        end
                         plantStartTime = 0
-                        task.wait(0.8)
+                        task.wait(0.5)
                         return
                     end
 
                     -- BÓN THỨC ĂN:
                     if State.AutoFood then
                         local foodType = ALL_FOOD_TYPES[State.SelectedFoodIndex] or "Basic"
-                        if foodType ~= "None" then
+                        if foodType ~= "None" and padPart then
                             pcall(function()
                                 for _, d in ipairs(padPart:GetDescendants()) do
-                                    if d:IsA("ProximityPrompt") then
+                                    if d:IsA("ProximityPrompt") and d ~= harvestPrompt then
                                         local act = (d.ActionText or ""):lower()
                                         local obj = (d.ObjectText or ""):lower()
                                         if act:find("feed") or act:find("ăn") or obj:find("feed") or obj:find("luck") then
@@ -1286,14 +1357,25 @@ task.spawn(function()
 
                     -- ĐỦ THỜI GIAN NUÔI TRƯỞNG THÀNH:
                     if elapsedTime >= targetGrowthTime then
-                        setStatus("🦖 Trứng đã lớn & ấp nở thành thú (" .. math.floor(elapsedTime) .. "s)! Đang thu hoạch...")
+                        setStatus("🦖 Đã nuôi đủ " .. math.floor(elapsedTime) .. "s! Đang thu hoạch con vật...")
+                        if hrp and cachedPadPos and (hrp.Position - cachedPadPos).Magnitude > 10 then
+                            hrp.CFrame = CFrame.new(cachedPadPos + Vector3.new(0, 3, 0))
+                        end
                         triggerPrompt(harvestPrompt)
+                        if firetouchinterest and hrp and padPart then
+                            local tp = padPart:IsA("BasePart") and padPart or padPart:FindFirstChildWhichIsA("BasePart")
+                            if tp then
+                                firetouchinterest(hrp, tp, 0)
+                                task.wait(0.01)
+                                firetouchinterest(hrp, tp, 1)
+                            end
+                        end
                         plantStartTime = 0
-                        task.wait(0.8)
+                        task.wait(0.6)
                         return
                     else
                         local left = math.ceil(targetGrowthTime - elapsedTime)
-                        setStatus("🥚 Đang phát triển trên bệ... (Còn " .. left .. "s để ấp nở thú)")
+                        setStatus("🥚 Đang ấp trứng trên bệ... (" .. left .. "s để thu hoạch)")
                     end
 
                 -- 4.2 BỆ ĐẤT ĐANG TRỐNG: GIEO TRỒNG TRỨNG TỪ TÚI ĐỒ VÀO KHU ĐẤT
@@ -1305,18 +1387,19 @@ task.spawn(function()
 
                     if char then
                         for _, t in ipairs(char:GetChildren()) do
-                            if t:IsA("Tool") and t.Name:lower():find("egg") then
+                            if t:IsA("Tool") and (t.Name:lower():find("egg") or t.Name:lower():find("trứng")) then
                                 eggTool = t break
                             end
                         end
                     end
                     if not eggTool and bp then
                         for _, t in ipairs(bp:GetChildren()) do
-                            if t:IsA("Tool") and t.Name:lower():find("egg") then
+                            if t:IsA("Tool") and (t.Name:lower():find("egg") or t.Name:lower():find("trứng")) then
                                 eggTool = t break
                             end
                         end
                     end
+                    -- Nếu không có tool nào tên "egg", lấy bất kỳ Tool nào trong túi đồ
                     if not eggTool and bp then
                         for _, t in ipairs(bp:GetChildren()) do
                             if t:IsA("Tool") then
@@ -1326,30 +1409,45 @@ task.spawn(function()
                     end
 
                     if eggTool then
+                        -- Cầm trứng trên tay
                         if char and eggTool.Parent == bp then
-                            eggTool.Parent = char
+                            local hum = getHumanoid()
+                            if hum then
+                                hum:EquipTool(eggTool)
+                            else
+                                eggTool.Parent = char
+                            end
                             task.wait(0.12)
                         end
 
-                        if hrp and padPart then
-                            local padPos = cachedPadPos or (padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position))
-                            if padPos and (hrp.Position - padPos).Magnitude > 12 then
-                                hrp.CFrame = CFrame.new(padPos + Vector3.new(0, 3, 0))
-                                task.wait(0.08)
-                            end
+                        -- Di chuyển ngay lên bệ đất
+                        local padPos = cachedPadPos or (padPart and (padPart:IsA("BasePart") and padPart.Position or (padPart:IsA("Model") and padPart.PrimaryPart and padPart.PrimaryPart.Position)))
+                        if hrp and padPos and (hrp.Position - padPos).Magnitude > 6 then
+                            hrp.CFrame = CFrame.new(padPos + Vector3.new(0, 3, 0))
+                            task.wait(0.08)
                         end
 
-                        setStatus("🌱 Trồng trứng vào khu đất: " .. eggTool.Name .. "...")
+                        setStatus("🌱 Đang trồng trứng: " .. eggTool.Name .. "...")
                         triggerPrompt(plantPrompt)
-                        task.wait(0.5)
+                        pcall(function() eggTool:Activate() end)
+
+                        if firetouchinterest and hrp and padPart then
+                            local tp = padPart:IsA("BasePart") and padPart or padPart:FindFirstChildWhichIsA("BasePart")
+                            if tp then
+                                firetouchinterest(hrp, tp, 0)
+                                task.wait(0.01)
+                                firetouchinterest(hrp, tp, 1)
+                            end
+                        end
+                        task.wait(0.4)
                     else
-                        setStatus("⏳ Túi đồ hết trứng! Hãy bật Auto Mua trên sông để tự mua thêm.")
-                        task.wait(1.0)
+                        setStatus("⏳ Túi đồ hết trứng! Đang chờ mua trứng từ con sông...")
+                        task.wait(0.5)
                     end
                 else
                     plantStartTime = 0
-                    setStatus("🔍 Đang tìm khu đất của bạn...")
-                    task.wait(1.0)
+                    setStatus("🔍 Đang tìm bệ trồng trên khu đất của bạn...")
+                    task.wait(0.5)
                 end
             end)
         end
