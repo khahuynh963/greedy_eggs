@@ -97,11 +97,30 @@ local State = {
     SpeedEnabled = false,
     WalkSpeed = 100,
     CFrameBoost = false,
-    CFrameSpeed = 3,
+    CFrameSpeed = 4,
     InfiniteJump = false,
     Noclip = false,
     AntiAFK = true
 }
+
+local ALL_WALK_SPEEDS = {32, 50, 80, 100, 150, 200, 300, 500, 1000, 2500, 5000, 10000}
+local ALL_CFRAME_SPEEDS = {2, 4, 6, 8, 12, 16, 25, 50, 100}
+
+local function getWalkSpeedDesc(spd)
+    if spd <= 32 then return "Mặc định x2 (" .. spd .. ")"
+    elseif spd <= 50 then return "Nhanh vừa (" .. spd .. ")"
+    elseif spd <= 80 then return "Lướt nhanh (" .. spd .. ")"
+    elseif spd <= 100 then return "Rất nhanh (" .. spd .. ")"
+    elseif spd <= 150 then return "Tốc biến (" .. spd .. ")"
+    elseif spd <= 200 then return "Siêu tốc (" .. spd .. ")"
+    elseif spd <= 300 then return "Thần tốc (" .. spd .. ")"
+    elseif spd <= 500 then return "Vận tốc âm thanh (" .. spd .. ")"
+    elseif spd <= 1000 then return "Hyper Sonic (" .. spd .. ")"
+    elseif spd <= 2500 then return "Tia chớp (" .. spd .. ")"
+    elseif spd <= 5000 then return "Vũ trụ (" .. spd .. ")"
+    else return "Thần thánh max (" .. spd .. ")"
+    end
+end
 
 local cachedMyPlot = nil
 local cachedPadPart = nil
@@ -1123,24 +1142,44 @@ end)
 -- ═══════════════════════════════════════════════════════════
 createSectionHeader("🏃 TỐC ĐỘ & TIỆN ÍCH", Color3.fromRGB(0, 200, 255))
 
-createToggleButton("⚡ Bật Tăng Tốc Di Chuyển (Speed)", State.SpeedEnabled, function(v)
+createToggleButton("⚡ Bật Tăng Tốc Di Chuyển (WalkSpeed)", State.SpeedEnabled, function(v)
     State.SpeedEnabled = v
     local hum = getHumanoid()
     if hum then hum.WalkSpeed = v and State.WalkSpeed or 16 end
-    setStatus(v and ("Tốc độ: " .. State.WalkSpeed) or "Đã về tốc độ bình thường.")
+    setStatus(v and ("Tốc độ: " .. State.WalkSpeed .. " - " .. getWalkSpeedDesc(State.WalkSpeed)) or "Đã về tốc độ bình thường.")
 end)
 
-createActionButton("⚡ Chỉnh Tốc Độ Di Chuyển", "Hiện tại: [ " .. tostring(State.WalkSpeed) .. " ]", Color3.fromRGB(0, 255, 170), function(btn, lbl)
-    if State.WalkSpeed == 60 then State.WalkSpeed = 100
-    elseif State.WalkSpeed == 100 then State.WalkSpeed = 150
-    elseif State.WalkSpeed == 150 then State.WalkSpeed = 200
-    elseif State.WalkSpeed == 200 then State.WalkSpeed = 250
-    else State.WalkSpeed = 60 end
-    lbl.Text = "Hiện tại: [ " .. tostring(State.WalkSpeed) .. " ]"
+createActionButton("⚡ Chỉnh Mốc Tốc Độ (WalkSpeed Presets)", "Hiện tại: [ " .. tostring(State.WalkSpeed) .. " ] (" .. getWalkSpeedDesc(State.WalkSpeed) .. ")", Color3.fromRGB(0, 255, 170), function(btn, lbl)
+    local curIdx = 1
+    for idx, spd in ipairs(ALL_WALK_SPEEDS) do
+        if spd == State.WalkSpeed then curIdx = idx break end
+    end
+    curIdx = curIdx + 1
+    if curIdx > #ALL_WALK_SPEEDS then curIdx = 1 end
+    State.WalkSpeed = ALL_WALK_SPEEDS[curIdx]
+    lbl.Text = "Hiện tại: [ " .. tostring(State.WalkSpeed) .. " ] (" .. getWalkSpeedDesc(State.WalkSpeed) .. ")"
     if State.SpeedEnabled then
         local hum = getHumanoid()
         if hum then hum.WalkSpeed = State.WalkSpeed end
     end
+    setStatus("⚡ Đã chọn tốc độ: " .. State.WalkSpeed .. " (" .. getWalkSpeedDesc(State.WalkSpeed) .. ")")
+end)
+
+createToggleButton("🌀 Bật Lướt Siêu Tốc CFrame (Bỏ Qua Anti-Cheat)", State.CFrameBoost, function(v)
+    State.CFrameBoost = v
+    setStatus(v and ("Đã bật Lướt CFrame " .. State.CFrameSpeed .. "x") or "Đã tắt Lướt CFrame.")
+end)
+
+createActionButton("🌀 Chỉnh Mức Lướt CFrame Multiplier", "Hiện tại: [ " .. tostring(State.CFrameSpeed) .. "x ] -> Bấm để đổi mốc", Color3.fromRGB(0, 200, 255), function(btn, lbl)
+    local curIdx = 1
+    for idx, spd in ipairs(ALL_CFRAME_SPEEDS) do
+        if spd == State.CFrameSpeed then curIdx = idx break end
+    end
+    curIdx = curIdx + 1
+    if curIdx > #ALL_CFRAME_SPEEDS then curIdx = 1 end
+    State.CFrameSpeed = ALL_CFRAME_SPEEDS[curIdx]
+    lbl.Text = "Hiện tại: [ " .. tostring(State.CFrameSpeed) .. "x ] -> Bấm để đổi mốc"
+    setStatus("🌀 Mức lướt CFrame: " .. State.CFrameSpeed .. "x")
 end)
 
 createToggleButton("🦘 Nhảy Vô Hạn (Infinite Jump)", State.InfiniteJump, function(v)
@@ -1153,6 +1192,63 @@ end)
 
 createToggleButton("🛡️ Chống Văng Game (Anti-AFK 24/7)", State.AntiAFK, function(v)
     State.AntiAFK = v
+end)
+
+-- ═══════════════════════════════════════════════════════════
+-- 🏃 MOVEMENT & INPUT HOOKS
+-- ═══════════════════════════════════════════════════════════
+pcall(function()
+    LocalPlayer.Idled:Connect(function()
+        if State.AntiAFK then
+            VirtualUser:Button2Down(Vector2.new(0, 0), Workspace.CurrentCamera.CFrame)
+            task.wait(1)
+            VirtualUser:Button2Up(Vector2.new(0, 0), Workspace.CurrentCamera.CFrame)
+        end
+    end)
+end)
+
+RunService.Stepped:Connect(function()
+    if State.Noclip then
+        local char = getCharacter()
+        if char then
+            for _, part in ipairs(char:GetChildren()) do
+                if part:IsA("BasePart") then part.CanCollide = false end
+            end
+        end
+    end
+    if State.SpeedEnabled then
+        local hum = getHumanoid()
+        if hum and hum.WalkSpeed ~= State.WalkSpeed then
+            hum.WalkSpeed = State.WalkSpeed
+        end
+    end
+end)
+
+RunService.RenderStepped:Connect(function(dt)
+    if State.CFrameBoost then
+        local hrp = getRootPart()
+        local hum = getHumanoid()
+        if hrp and hum and hum.MoveDirection.Magnitude > 0 then
+            hrp.CFrame = hrp.CFrame + (hum.MoveDirection * (State.CFrameSpeed * 10 * dt))
+        end
+    end
+end)
+
+UserInputService.JumpRequest:Connect(function()
+    if State.InfiniteJump then
+        local hum = getHumanoid()
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+pcall(function()
+    LocalPlayer.CharacterAdded:Connect(function(char)
+        task.wait(0.5)
+        if State.SpeedEnabled then
+            local hum = char:WaitForChild("Humanoid", 3)
+            if hum then hum.WalkSpeed = State.WalkSpeed end
+        end
+    end)
 end)
 
 -- ═══════════════════════════════════════════════════════════
